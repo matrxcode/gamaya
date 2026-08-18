@@ -1,1183 +1,1118 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-import 'dart:math';
-import 'package:flutter/material.dart';
-import 'package:crypto/crypto.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
-
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MasterRoomApp());
-}
-
-/// ============================================================================
-/// SECTION 1: CORE CONSTANTS & CONFIGURATIONS
-/// ============================================================================
-
-class AppConfigs {
-  static const String appName = "نظام إدارة الغرف والإشارات Smart Room Manager";
-  static const String appVersion = "3.5.0";
-  static const String secretEncryptionKey = "MASTER_ROOM_SECURITY_KEY_2026_PRO";
-  static const int defaultReminderDaysShort = 10;
-  static const int defaultReminderDaysLong = 30;
-}
-
-enum RoomStatus { online, offlineSimulated, archived, suspended }
-enum TransactionType { expense, income, transfer }
-enum PriorityLevel { low, medium, high, critical }
-
-/// ============================================================================
-/// SECTION 2: DOMAIN MODELS (MODEL LAYER)
-/// ============================================================================
-
-class RoomMember {
-  final String id;
-  final String name;
-  final String role;
-  final String phoneWhatsapp;
-  final String cashNumber;
-  final double totalContribution;
-  final DateTime joinedAt;
-  final bool isActive;
-
-  RoomMember({
-    required this.id,
-    required this.name,
-    required this.role,
-    this.phoneWhatsapp = '',
-    this.cashNumber = '',
-    this.totalContribution = 0.0,
-    DateTime? joinedAt,
-    this.isActive = true,
-  }) : joinedAt = joinedAt ?? DateTime.now();
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'role': role,
-        'phoneWhatsapp': phoneWhatsapp,
-        'cashNumber': cashNumber,
-        'totalContribution': totalContribution,
-        'joinedAt': joinedAt.toIso8601String(),
-        'isActive': isActive,
-      };
-
-  factory RoomMember.fromJson(Map<String, dynamic> json) => RoomMember(
-        id: json['id'] ?? '',
-        name: json['name'] ?? 'عضو مجهول',
-        role: json['role'] ?? 'عضو',
-        phoneWhatsapp: json['phoneWhatsapp'] ?? '',
-        cashNumber: json['cashNumber'] ?? '',
-        totalContribution: (json['totalContribution'] as num?)?.toDouble() ?? 0.0,
-        joinedAt: json['joinedAt'] != null ? DateTime.parse(json['joinedAt']) : DateTime.now(),
-        isActive: json['isActive'] ?? true,
-      );
-
-  RoomMember copyWith({
-    String? name,
-    String? role,
-    String? phoneWhatsapp,
-    String? cashNumber,
-    double? totalContribution,
-    bool? isActive,
-  }) {
-    return RoomMember(
-      id: id,
-      name: name ?? this.name,
-      role: role ?? this.role,
-      phoneWhatsapp: phoneWhatsapp ?? this.phoneWhatsapp,
-      cashNumber: cashNumber ?? this.cashNumber,
-      totalContribution: totalContribution ?? this.totalContribution,
-      joinedAt: joinedAt,
-      isActive: isActive ?? this.isActive,
-    );
-  }
-}
-
-class DailyTransaction {
-  final String id;
-  final String title;
-  final double amount;
-  final String paidByMemberId;
-  final DateTime timestamp;
-  final String category;
-  final TransactionType type;
-  final String note;
-
-  DailyTransaction({
-    required this.id,
-    required this.title,
-    required this.amount,
-    required this.paidByMemberId,
-    required this.timestamp,
-    required this.category,
-    this.type = TransactionType.expense,
-    this.note = '',
-  });
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'amount': amount,
-        'paidByMemberId': paidByMemberId,
-        'timestamp': timestamp.toIso8601String(),
-        'category': category,
-        'type': type.index,
-        'note': note,
-      };
-
-  factory DailyTransaction.fromJson(Map<String, dynamic> json) => DailyTransaction(
-        id: json['id'] ?? '',
-        title: json['title'] ?? 'بدون عنوان',
-        amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
-        paidByMemberId: json['paidByMemberId'] ?? '',
-        timestamp: json['timestamp'] != null ? DateTime.parse(json['timestamp']) : DateTime.now(),
-        category: json['category'] ?? 'عام',
-        type: TransactionType.values[json['type'] ?? 0],
-        note: json['note'] ?? '',
-      );
-}
-
-class RoomActivityLog {
-  final String id;
-  final String description;
-  final DateTime timestamp;
-  final PriorityLevel priority;
-
-  RoomActivityLog({
-    required this.id,
-    required this.description,
-    required this.timestamp,
-    this.priority = PriorityLevel.medium,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'description': description,
-        'timestamp': timestamp.toIso8601String(),
-        'priority': priority.index,
-      };
-
-  factory RoomActivityLog.fromJson(Map<String, dynamic> json) => RoomActivityLog(
-        id: json['id'] ?? '',
-        description: json['description'] ?? '',
-        timestamp: json['timestamp'] != null ? DateTime.parse(json['timestamp']) : DateTime.now(),
-        priority: PriorityLevel.values[json['priority'] ?? 1],
-      );
-}
-
-class RoomModel {
-  final String roomId;
-  final String roomName;
-  final String description;
-  final DateTime createdDate;
-  final List<RoomMember> members;
-  final List<DailyTransaction> transactions;
-  final List<RoomActivityLog> activityLogs;
-  RoomStatus status;
-  double budgetLimit;
-
-  RoomModel({
-    required this.roomId,
-    required this.roomName,
-    required this.description,
-    required this.createdDate,
-    required this.members,
-    required this.transactions,
-    required this.activityLogs,
-    this.status = RoomStatus.online,
-    this.budgetLimit = 10000.0,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'roomId': roomId,
-        'roomName': roomName,
-        'description': description,
-        'createdDate': createdDate.toIso8601String(),
-        'members': members.map((m) => m.toJson()).toList(),
-        'transactions': transactions.map((t) => t.toJson()).toList(),
-        'activityLogs': activityLogs.map((a) => a.toJson()).toList(),
-        'status': status.index,
-        'budgetLimit': budgetLimit,
-      };
-
-  factory RoomModel.fromJson(Map<String, dynamic> json) => RoomModel(
-        roomId: json['roomId'] ?? '',
-        roomName: json['roomName'] ?? 'غرفة بدون اسم',
-        description: json['description'] ?? '',
-        createdDate: json['createdDate'] != null ? DateTime.parse(json['createdDate']) : DateTime.now(),
-        members: (json['members'] as List? ?? []).map((m) => RoomMember.fromJson(m)).toList(),
-        transactions: (json['transactions'] as List? ?? []).map((t) => DailyTransaction.fromJson(t)).toList(),
-        activityLogs: (json['activityLogs'] as List? ?? []).map((a) => RoomActivityLog.fromJson(a)).toList(),
-        status: RoomStatus.values[json['status'] ?? 0],
-        budgetLimit: (json['budgetLimit'] as num?)?.toDouble() ?? 10000.0,
-      );
-}
-
-/// ============================================================================
-/// SECTION 3: SECURITY & ENCRYPTION VAULT
-/// ============================================================================
-
-class SecurityService {
-  static String generateHash(String data) {
-    final bytes = utf8.encode(data + AppConfigs.secretEncryptionKey);
-    return sha256.convert(bytes).toString();
-  }
-
-  static String encryptPayload(Map<String, dynamic> jsonPayload) {
-    String rawJson = jsonEncode(jsonPayload);
-    String base64Encoded = base64Encode(utf8.encode(rawJson));
-    String hash = generateHash(base64Encoded);
-
-    Map<String, dynamic> securePackage = {
-      'checksum': hash,
-      'payload': base64Encoded,
-      'exportedAt': DateTime.now().toIso8601String(),
-      'appVersion': AppConfigs.appVersion,
-    };
-
-    return jsonEncode(securePackage);
-  }
-
-  static Map<String, dynamic>? decryptPayload(String securePackageStr) {
-    try {
-      Map<String, dynamic> package = jsonDecode(securePackageStr);
-      String checksum = package['checksum'];
-      String payload = package['payload'];
-
-      if (checksum != generateHash(payload)) {
-        throw Exception("عفواً! الملف غير صالح أو تم التلاعب بمحتواه!");
-      }
-
-      String decodedJson = utf8.decode(base64Decode(payload));
-      return jsonDecode(decodedJson);
-    } catch (e) {
-      debugPrint("Security Verification Error: $e");
-      return null;
-    }
-  }
-}
-
-/// ============================================================================
-/// SECTION 4: COMMUNICATIONS & WHATSAPP TEMPLATES ENGINE
-/// ============================================================================
-
-class WhatsappService {
-  static Future<bool> sendWhatsappMessage({
-    required String phone,
-    required String message,
-  }) async {
-    if (phone.isEmpty) return false;
-    String formattedPhone = phone.replaceAll(RegExp(r'\D'), '');
-    if (!formattedPhone.startsWith('20') && formattedPhone.length == 11) {
-      formattedPhone = '20$formattedPhone';
-    }
-
-    final Uri whatsappUrl = Uri.parse(
-        "https://wa.me/$formattedPhone?text=${Uri.encodeComponent(message)}");
-
-    try {
-      if (await canLaunchUrl(whatsappUrl)) {
-        await launchUrl(whatsappUrl, mode: LaunchMode.externalApplication);
-        return true;
-      }
-    } catch (e) {
-      debugPrint("WhatsApp Error: $e");
-    }
-    return false;
-  }
-
-  static String buildDayReminderMessage(RoomMember member, RoomModel room, int daysCount) {
-    double totalSpent = RoomAnalytics.calculateTotalExpenses(room);
-    return "السلام عليكم يا ${member.name} ✋💖\n\n"
-        "📅 *تذكير دوري لـ ($daysCount يوم) لغرفة:* ${room.roomName}\n"
-        "------------------------------------\n"
-        "📊 *إجمالي مصاريف الغرفة حالياً:* ${totalSpent.toStringAsFixed(2)} ج.م\n"
-        "💳 *رقم الكاش الخاص بك المسجل:* ${member.cashNumber.isEmpty ? 'غير مسجل' : member.cashNumber}\n\n"
-        "يرجى استيراد الملف اليومي داخل التطبيق لتبقى في وضع الأونلاين التزاماً المزامنة 🟢.\n"
-        "دمت بخير!";
-  }
-
-  static String buildDailyReportMessage(RoomMember member, RoomModel room) {
-    return "أهلاً ${member.name} 👋\n"
-        "إليك *الملف اليومي الجديد* لغرفة: *${room.roomName}* 📁\n\n"
-        "حمل الملف المرفق وقم بعمل 'استيراد' من التطبيق ليتم تحديث البيانات وتفعيل وضع الاونلاين المستورد فوراً! 🚀";
-  }
-}
-
-/// ============================================================================
-/// SECTION 5: ROOM SYNC & FILE IMPORT/EXPORT ENGINE
-/// ============================================================================
-
-class RoomSyncEngine {
-  static Future<File?> exportDailyRoomFile(RoomModel room) async {
-    try {
-      final encryptedData = SecurityService.encryptPayload(room.toJson());
-      final tempDir = await getTemporaryDirectory();
-      final fileName = "ROOM_${room.roomId}_${DateTime.now().millisecondsSinceEpoch}.mrf";
-      final file = File("${tempDir.path}/$fileName");
-      await file.writeAsString(encryptedData);
-      return file;
-    } catch (e) {
-      debugPrint("Export Failed: $e");
-      return null;
-    }
-  }
-
-  static Future<void> shareRoomFile(RoomModel room, {String? targetPhone}) async {
-    File? file = await exportDailyRoomFile(room);
-    if (file != null) {
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: "الملف اليومي لغرفة: ${room.roomName}\nاستورده داخل التطبيق لتصبح في وضع الأونلاين 🟢",
-      );
-    }
-  }
-
-  static Future<RoomModel?> importRoomFromFile() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles();
-      if (result != null && result.files.single.path != null) {
-        File file = File(result.files.single.path!);
-        String content = await file.readAsString();
-        Map<String, dynamic>? decrypted = SecurityService.decryptPayload(content);
-
-        if (decrypted != null) {
-          RoomModel importedRoom = RoomModel.fromJson(decrypted);
-          importedRoom.status = RoomStatus.offlineSimulated;
-          importedRoom.activityLogs.add(RoomActivityLog(
-            id: Random().nextInt(999999).toString(),
-            description: "تم استيراد الملف اليومي المشفّر بنجاح والتنسيق أونلاين.",
-            timestamp: DateTime.now(),
-            priority: PriorityLevel.high,
-          ));
-          return importedRoom;
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام إدارة الغرف والإشارات | Smart Room Manager</title>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        /* ==========================================================================
+           SECTION 1: CSS STYLES & THEME (DARK MODE PRO)
+           ========================================================================== */
+        :root {
+            --bg-color: #101418;
+            --card-bg: #1c2229;
+            --card-hover: #252d37;
+            --dialog-bg: #222a33;
+            --primary: #00bfa5;
+            --primary-hover: #00a892;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #10b981;
+            --whatsapp-color: #25d366;
+            --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+            --transition: all 0.25s ease-in-out;
         }
-      }
-    } catch (e) {
-      debugPrint("Import Error: $e");
-    }
-    return null;
-  }
-}
 
-/// ============================================================================
-/// SECTION 6: FINANCIAL ANALYTICS & BUDGET ENGINE
-/// ============================================================================
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Tajawal', sans-serif;
+            user-select: none;
+        }
 
-class RoomAnalytics {
-  static double calculateTotalExpenses(RoomModel room) {
-    return room.transactions
-        .where((t) => t.type == TransactionType.expense)
-        .fold(0.0, (sum, item) => sum + item.amount);
-  }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
 
-  static double calculateTotalIncome(RoomModel room) {
-    return room.transactions
-        .where((t) => t.type == TransactionType.income)
-        .fold(0.0, (sum, item) => sum + item.amount);
-  }
+        /* Header / Navbar */
+        header {
+            background-color: var(--card-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: var(--shadow);
+        }
 
-  static Map<String, double> getExpensesByCategory(RoomModel room) {
-    Map<String, double> categoryMap = {};
-    for (var tx in room.transactions) {
-      if (tx.type == TransactionType.expense) {
-        categoryMap[tx.category] = (categoryMap[tx.category] ?? 0.0) + tx.amount;
-      }
-    }
-    return categoryMap;
-  }
+        header .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
 
-  static Map<String, double> calculateMemberBalances(RoomModel room) {
-    double totalExpense = calculateTotalExpenses(room);
-    if (room.members.isEmpty) return {};
+        header .logo i {
+            color: var(--primary);
+            font-size: 1.8rem;
+        }
 
-    double sharePerMember = totalExpense / room.members.length;
-    Map<String, double> balances = {};
+        header .logo h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
 
-    for (var member in room.members) {
-      double paid = room.transactions
-          .where((tx) => tx.paidByMemberId == member.id && tx.type == TransactionType.expense)
-          .fold(0.0, (sum, item) => sum + item.amount);
-      balances[member.id] = paid - sharePerMember;
-    }
-    return balances;
-  }
+        header .header-actions {
+            display: flex;
+            gap: 10px;
+        }
 
-  static String getBudgetHealthStatus(RoomModel room) {
-    double spent = calculateTotalExpenses(room);
-    if (room.budgetLimit <= 0) return "غير محدد";
-    double ratio = spent / room.budgetLimit;
+        /* Buttons */
+        .btn {
+            background-color: var(--card-bg);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: var(--transition);
+            font-size: 0.9rem;
+        }
 
-    if (ratio < 0.5) return "ممتاز جداً (إنفاق دون 50%)";
-    if (ratio < 0.85) return "متوازن (مقبول)";
-    return "خطر (تجاوزت أو اقتربت من السقف!)";
-  }
-}
+        .btn:hover {
+            background-color: var(--card-hover);
+            border-color: var(--primary);
+        }
 
-/// ============================================================================
-/// SECTION 7: LOCAL PERSISTENCE STORAGE CONTROLLER
-/// ============================================================================
+        .btn-primary {
+            background-color: var(--primary);
+            color: #000;
+            border: none;
+        }
 
-class LocalStorageController {
-  static Future<void> saveRoomsToLocal(List<RoomModel> rooms) async {
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      final file = File("${directory.path}/rooms_database_vault.json");
-      String jsonStr = jsonEncode(rooms.map((r) => r.toJson()).toList());
-      await file.writeAsString(jsonStr);
-    } catch (e) {
-      debugPrint("Local Save Error: $e");
-    }
-  }
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+            color: #000;
+            box-shadow: 0 0 12px rgba(0, 191, 165, 0.4);
+        }
 
-  static Future<List<RoomModel>> loadRoomsFromLocal() async {
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      final file = File("${directory.path}/rooms_database_vault.json");
-      if (await file.exists()) {
-        String content = await file.readAsString();
-        List<dynamic> jsonList = jsonDecode(content);
-        return jsonList.map((j) => RoomModel.fromJson(j)).toList();
-      }
-    } catch (e) {
-      debugPrint("Local Load Error: $e");
-    }
-    return [];
-  }
-}
+        .btn-whatsapp {
+            background-color: rgba(37, 211, 102, 0.15);
+            color: var(--whatsapp-color);
+            border: 1px solid var(--whatsapp-color);
+        }
 
-/// ============================================================================
-/// SECTION 8: APP ENTRY & THEME DEFINITION
-/// ============================================================================
+        .btn-whatsapp:hover {
+            background-color: var(--whatsapp-color);
+            color: #000;
+        }
 
-class MasterRoomApp extends StatelessWidget {
-  const MasterRoomApp({Key? key}) : super(key: key);
+        .btn-danger {
+            background-color: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+            border: 1px solid var(--danger);
+        }
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: AppConfigs.appName,
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        primarySwatch: Colors.teal,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.teal,
-          brightness: Brightness.dark,
-        ),
-        scaffoldBackgroundColor: const Color(0xFF101418),
-        cardColor: const Color(0xFF1C2229),
-        dialogBackgroundColor: const Color(0xFF222A33),
-        fontFamily: 'Roboto',
-      ),
-      home: const RoomDashboardScreen(),
-    );
-  }
-}
+        .btn-danger:hover {
+            background-color: var(--danger);
+            color: #fff;
+        }
 
-/// ============================================================================
-/// SECTION 9: MAIN DASHBOARD SCREEN (شاشة إدارة الغرف الرئيسية)
-/// ============================================================================
+        .btn-sm {
+            padding: 0.3rem 0.6rem;
+            font-size: 0.8rem;
+            border-radius: 6px;
+        }
 
-class RoomDashboardScreen extends StatefulWidget {
-  const RoomDashboardScreen({Key? key}) : super(key: key);
+        /* Main Layout Container */
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+            width: 100%;
+            flex: 1;
+        }
 
-  @override
-  State<RoomDashboardScreen> createState() => _RoomDashboardScreenState();
-}
+        /* Dashboard Views */
+        .view-section {
+            display: none;
+            animation: fadeIn 0.3s ease-in-out forwards;
+        }
 
-class _RoomDashboardScreenState extends State<RoomDashboardScreen> {
-  List<RoomModel> _rooms = [];
-  bool _isLoading = true;
+        .view-section.active {
+            display: block;
+        }
 
-  @override
-  void initState() {
-    super.initState();
-    _loadInitialData();
-  }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
 
-  Future<void> _loadInitialData() async {
-    List<RoomModel> loaded = await LocalStorageController.loadRoomsFromLocal();
-    if (loaded.isEmpty) {
-      _rooms = [_generateDefaultDemoRoom()];
-      await _persist();
-    } else {
-      _rooms = loaded;
-    }
-    setState(() => _isLoading = false);
-  }
+        /* Rooms Grid */
+        .rooms-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
 
-  Future<void> _persist() async {
-    await LocalStorageController.saveRoomsToLocal(_rooms);
-  }
+        .room-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
 
-  RoomModel _generateDefaultDemoRoom() {
-    return RoomModel(
-      roomId: "101",
-      roomName: "غرفة إشارات VIP الخاصة",
-      description: "إدارة الحسابات اليومية والمشاركات والواتساب",
-      createdDate: DateTime.now().subtract(const Duration(days: 2)),
-      budgetLimit: 20000.0,
-      members: [
-        RoomMember(
-          id: "m1",
-          name: "أحمد العشري (أدمن)",
-          role: "مالك",
-          phoneWhatsapp: "01000000000",
-          cashNumber: "01000000000",
-        ),
-        RoomMember(
-          id: "m2",
-          name: "محمد علي",
-          role: "عضو",
-          phoneWhatsapp: "01100000000",
-          cashNumber: "01100000000",
-        ),
-      ],
-      transactions: [
-        DailyTransaction(
-          id: "t1",
-          title: "مصاريف إشارات وسيرفرات",
-          amount: 1500.0,
-          paidByMemberId: "m1",
-          timestamp: DateTime.now().subtract(const Duration(hours: 3)),
-          category: "تقنية",
-        ),
-      ],
-      activityLogs: [
-        RoomActivityLog(
-          id: "a1",
-          description: "تم إنشاء الغرفة بنجاح وتفعيل النظام.",
-          timestamp: DateTime.now(),
-        ),
-      ],
-    );
-  }
+        .room-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+            box-shadow: var(--shadow);
+        }
 
-  void _createNewRoomDialog() {
-    TextEditingController nameController = TextEditingController();
-    TextEditingController descController = TextEditingController();
-    TextEditingController budgetController = TextEditingController(text: "10000");
+        .room-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("إنشاء غرفة جديدة"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: "اسم الغرفة")),
-            TextField(controller: descController, decoration: const InputDecoration(labelText: "الوصف")),
-            TextField(
-              controller: budgetController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: "الميزانية المحددة"),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameController.text.isNotEmpty) {
-                RoomModel newRoom = RoomModel(
-                  roomId: Random().nextInt(99999).toString(),
-                  roomName: nameController.text,
-                  description: descController.text,
-                  createdDate: DateTime.now(),
-                  budgetLimit: double.tryParse(budgetController.text) ?? 10000.0,
-                  members: [],
-                  transactions: [],
-                  activityLogs: [
-                    RoomActivityLog(
-                      id: Random().nextInt(9999).toString(),
-                      description: "تم إنشاء الغرفة",
-                      timestamp: DateTime.now(),
-                    )
-                  ],
-                );
-                setState(() => _rooms.add(newRoom));
-                await _persist();
-                Navigator.pop(context);
-              }
-            },
-            child: const Text("إنشاء"),
-          )
-        ],
-      ),
-    );
-  }
+        .room-card-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
 
-  void _importRoomFile() async {
-    RoomModel? imported = await RoomSyncEngine.importRoomFromFile();
-    if (imported != null) {
-      setState(() {
-        _rooms.removeWhere((r) => r.roomId == imported.roomId);
-        _rooms.add(imported);
-      });
-      await _persist();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("تم استيراد غرفة [${imported.roomName}] وتفعيل وضع الأونلاين المستورد!")),
-      );
-    }
-  }
+        .room-badge {
+            background-color: rgba(0, 191, 165, 0.15);
+            color: var(--primary);
+            border: 1px solid var(--primary);
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("مركز إشارات الغرف والتواصل (10)"),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.file_download, color: Colors.tealAccent),
-            tooltip: "استيراد ملف يومي",
-            onPressed: _importRoomFile,
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _rooms.isEmpty
-              ? const Center(child: Text("لا توجد غرف متاحة. أنشئ أو استورد غرفة!"))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: _rooms.length,
-                  itemBuilder: (context, index) {
-                    final room = _rooms[index];
-                    return RoomCardWidget(
-                      room: room,
-                      onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => RoomDetailScreen(
-                              room: room,
-                              onRoomUpdated: () async {
-                                setState(() {});
-                                await _persist();
-                              },
-                            ),
-                          ),
-                        );
-                        setState(() {});
-                      },
-                      onExport: () => RoomSyncEngine.shareRoomFile(room),
-                    );
-                  },
-                ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _createNewRoomDialog,
-        icon: const Icon(Icons.add_home),
-        label: const Text("غرفة جديدة"),
-      ),
-    );
-  }
-}
+        .room-card-desc {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 1.5rem;
+            line-height: 1.4;
+            height: 2.8em;
+            overflow: hidden;
+        }
 
-/// ============================================================================
-/// SECTION 10: CUSTOM ROOM CARD WIDGET
-/// ============================================================================
+        .room-card-stats {
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid var(--border-color);
+            padding-top: 1rem;
+        }
 
-class RoomCardWidget extends StatelessWidget {
-  final RoomModel room;
-  final VoidCallback onTap;
-  final VoidCallback onExport;
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
 
-  const RoomCardWidget({
-    Key? key,
-    required this.room,
-    required this.onTap,
-    required this.onExport,
-  }) : super(key: key);
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
 
-  @override
-  Widget build(BuildContext context) {
-    bool isSimulated = room.status == RoomStatus.offlineSimulated;
-    double spent = RoomAnalytics.calculateTotalExpenses(room);
+        .stat-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-top: 2px;
+        }
 
-    return Card(
-      elevation: 3,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      room.roomName,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isSimulated ? Colors.orange.withOpacity(0.15) : Colors.green.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: isSimulated ? Colors.orange : Colors.green),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isSimulated ? Icons.wifi_off : Icons.wifi,
-                          size: 14,
-                          color: isSimulated ? Colors.orange : Colors.green,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          isSimulated ? "أونلاين (مستورد)" : "أونلاين مباشر",
-                          style: TextStyle(
-                            color: isSimulated ? Colors.orange : Colors.green,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(room.description, style: TextStyle(color: Colors.grey[400], fontSize: 13)),
-              const Divider(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("إجمالي المصاريف", style: TextStyle(fontSize: 11, color: Colors.grey[400])),
-                      Text("${spent.toStringAsFixed(1)} ج.م",
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.tealAccent)),
-                    ],
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("الأعضاء مضافين", style: TextStyle(fontSize: 11, color: Colors.grey[400])),
-                      Text("${room.members.length} أعضاء",
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.share, color: Colors.teal),
-                    tooltip: "تصدير ومشاركة الملف اليومي",
-                    onPressed: onExport,
-                  ),
-                ],
-              )
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+        /* Detailed Room Navigation & Tabs */
+        .room-detail-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 1.5rem;
+        }
 
-/// ============================================================================
-/// SECTION 11: DETAILED ROOM MANAGEMENT SCREEN (شاشة تفاصيل الغرفة وتصنيفات الواتس)
-/// ============================================================================
+        .tabs-header {
+            display: flex;
+            gap: 10px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 1.5rem;
+        }
 
-class RoomDetailScreen extends StatefulWidget {
-  final RoomModel room;
-  final VoidCallback onRoomUpdated;
+        .tab-btn {
+            padding: 0.8rem 1.5rem;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
 
-  const RoomDetailScreen({Key? key, required this.room, required this.onRoomUpdated}) : super(key: key);
+        .tab-btn:hover {
+            color: var(--text-main);
+        }
 
-  @override
-  State<RoomDetailScreen> createState() => _RoomDetailScreenState();
-}
+        .tab-btn.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
 
-class _RoomDetailScreenState extends State<RoomDetailScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+        /* Members List Cards */
+        .members-list, .transactions-list, .logs-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
 
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-  }
+        .member-card, .transaction-card, .log-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: var(--transition);
+        }
 
-  void _addMemberDialog() {
-    TextEditingController nameController = TextEditingController();
-    TextEditingController roleController = TextEditingController();
-    TextEditingController phoneController = TextEditingController();
-    TextEditingController cashController = TextEditingController();
+        .member-card:hover, .transaction-card:hover {
+            background-color: var(--card-hover);
+        }
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("إضافة عضو جديد برقم الواتس والكاش"),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameController, decoration: const InputDecoration(labelText: "اسم الشخص")),
-              TextField(controller: roleController, decoration: const InputDecoration(labelText: "الدور (عضو/أدمن)")),
-              TextField(
-                controller: phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: "رقم الواتساب (لإرسال الرسائل)"),
-              ),
-              TextField(
-                controller: cashController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: "رقم المحفظة / الكاش (Vodafone / InstaPay)"),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
-          ElevatedButton(
-            onPressed: () {
-              if (nameController.text.isNotEmpty) {
-                setState(() {
-                  widget.room.members.add(
-                    RoomMember(
-                      id: Random().nextInt(99999).toString(),
-                      name: nameController.text,
-                      role: roleController.text.isEmpty ? "عضو" : roleController.text,
-                      phoneWhatsapp: phoneController.text,
-                      cashNumber: cashController.text,
-                    ),
-                  );
-                  widget.room.activityLogs.add(RoomActivityLog(
-                    id: Random().nextInt(9999).toString(),
-                    description: "تم إضافة العضو [${nameController.text}] بنجاح.",
-                    timestamp: DateTime.now(),
-                  ));
-                });
-                widget.onRoomUpdated();
-                Navigator.pop(context);
-              }
-            },
-            child: const Text("حفظ العضو"),
-          )
-        ],
-      ),
-    );
-  }
+        .member-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
 
-  void _addTransactionDialog() {
-    TextEditingController titleController = TextEditingController();
-    TextEditingController amountController = TextEditingController();
-    String category = "عام";
-    String selectedMemberId = widget.room.members.isNotEmpty ? widget.room.members.first.id : "";
+        .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
 
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text("إضافة معاملة جديدة"),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: titleController, decoration: const InputDecoration(labelText: "عنوان المعاملة")),
-                TextField(
-                  controller: amountController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: "المبلغ (ج.م)"),
-                ),
-                const SizedBox(height: 12),
-                if (widget.room.members.isNotEmpty)
-                  DropdownButtonFormField<String>(
-                    value: selectedMemberId,
-                    items: widget.room.members.map((m) {
-                      return DropdownMenuItem(value: m.id, child: Text("دافع: ${m.name}"));
-                    }).toList(),
-                    onChanged: (val) => setDialogState(() => selectedMemberId = val!),
-                    decoration: const InputDecoration(labelText: "الشخص الدافع"),
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
-            ElevatedButton(
-              onPressed: () {
-                if (titleController.text.isNotEmpty && amountController.text.isNotEmpty) {
-                  setState(() {
-                    widget.room.transactions.add(
-                      DailyTransaction(
-                        id: Random().nextInt(99999).toString(),
-                        title: titleController.text,
-                        amount: double.parse(amountController.text),
-                        paidByMemberId: selectedMemberId,
-                        timestamp: DateTime.now(),
-                        category: category,
-                      ),
-                    );
-                  });
-                  widget.onRoomUpdated();
-                  Navigator.pop(context);
+        .member-details h4 {
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .member-details p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 3px;
+        }
+
+        .member-balance {
+            text-align: left;
+        }
+
+        .balance-title {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .balance-amount {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .balance-amount.positive { color: var(--success); }
+        .balance-amount.negative { color: var(--danger); }
+
+        /* Modal Dialogs */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.75);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: var(--transition);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal {
+            background-color: var(--dialog-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 500px;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            transform: scale(0.9);
+            transition: var(--transition);
+        }
+
+        .modal-overlay.open .modal {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        .modal-close:hover { color: var(--text-main); }
+
+        .form-group {
+            margin-bottom: 1.2rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-muted);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-main);
+            font-size: 0.95rem;
+            outline: none;
+            transition: var(--transition);
+        }
+
+        .form-control:focus {
+            border-color: var(--primary);
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 1.5rem;
+        }
+
+        /* Analytics Card */
+        .analytics-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 10px;
+            background-color: #334155;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: var(--primary);
+            width: 0%;
+            transition: width 0.5s ease-in-out;
+        }
+
+        /* Notification Toast */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background-color: var(--card-bg);
+            border: 1px solid var(--primary);
+            color: var(--text-main);
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 2000;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: var(--transition);
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* Responsive Utilities */
+        @media (max-width: 768px) {
+            header { padding: 1rem; }
+            .container { padding: 0 1rem; }
+            .tabs-header { overflow-x: auto; }
+            .member-card, .transaction-card { flex-direction: column; align-items: flex-start; gap: 1rem; }
+            .member-balance { width: 100%; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 0.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ==========================================================================
+       SECTION 2: HTML STRUCTURE & LAYOUT
+       ========================================================================== -->
+
+    <!-- Top Header Navigation -->
+    <header>
+        <div class="logo">
+            <i class="fa-solid fa-house-signal"></i>
+            <h1>Smart Room Manager Pro</h1>
+        </div>
+        <div class="header-actions">
+            <button class="btn" onclick="openImportModal()"><i class="fa-solid fa-file-import"></i> استيراد غرفة</button>
+            <button class="btn btn-primary" onclick="openCreateRoomModal()"><i class="fa-solid fa-plus"></i> غرفة جديدة</button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+        
+        <!-- VIEW 1: DASHBOARD (ROOMS LIST) -->
+        <section id="dashboardView" class="view-section active">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2>غرف الحسابات والعمليات الحالية</h2>
+                <span id="roomsCountBadge" style="color: var(--text-muted); font-weight: 600;">إجمالي الغرف: 0</span>
+            </div>
+            <div class="rooms-grid" id="roomsGrid">
+                <!-- Room Cards Generated Dynamic via JS -->
+            </div>
+        </section>
+
+        <!-- VIEW 2: ROOM DETAILS & TABS -->
+        <section id="roomDetailView" class="view-section">
+            <div class="room-detail-header">
+                <div>
+                    <button class="btn btn-sm" onclick="showDashboardView()" style="margin-bottom: 0.5rem;"><i class="fa-solid fa-arrow-right"></i> العودة للرئيسية</button>
+                    <h2 id="currentRoomTitle">اسم الغرفة</h2>
+                    <p id="currentRoomDesc" style="color: var(--text-muted); font-size: 0.9rem;">وصف الغرفة يظهر هنا</p>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-whatsapp" onclick="exportCurrentRoom()"><i class="fa-solid fa-share-nodes"></i> تصدير البيانات</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteCurrentRoom()"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            </div>
+
+            <!-- Tabs Selection Navigation -->
+            <div class="tabs-header">
+                <button class="tab-btn active" onclick="switchTab('membersTab', this)"><i class="fa-solid fa-users"></i> الأعضاء والواتساب</button>
+                <button class="tab-btn" onclick="switchTab('transactionsTab', this)"><i class="fa-solid fa-receipt"></i> المصاريف</button>
+                <button class="tab-btn" onclick="switchTab('analyticsTab', this)"><i class="fa-solid fa-chart-pie"></i> التحليلات</button>
+                <button class="tab-btn" onclick="switchTab('logsTab', this)"><i class="fa-solid fa-clock-rotate-left"></i> السجل</button>
+            </div>
+
+            <!-- Tab 1: Members Content -->
+            <div id="membersTab" class="tab-content">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3>قائمة الأعضاء وحسابات التسوية</h3>
+                    <button class="btn btn-primary btn-sm" onclick="openAddMemberModal()"><i class="fa-solid fa-user-plus"></i> إضافة عضو جديد</button>
+                </div>
+                <div class="members-list" id="membersList">
+                    <!-- Members Dynamic Generated -->
+                </div>
+            </div>
+
+            <!-- Tab 2: Transactions Content -->
+            <div id="transactionsTab" class="tab-content" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3>سجل المعاملات والإنفاق</h3>
+                    <button class="btn btn-primary btn-sm" onclick="openAddTransactionModal()"><i class="fa-solid fa-cart-plus"></i> إضافة معاملة</button>
+                </div>
+                <div class="transactions-list" id="transactionsList">
+                    <!-- Transactions Dynamic Generated -->
+                </div>
+            </div>
+
+            <!-- Tab 3: Analytics Content -->
+            <div id="analyticsTab" class="tab-content" style="display: none;">
+                <div class="analytics-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h4>مؤشر الميزانية الإجمالية</h4>
+                        <span id="budgetHealthStatus" style="color: var(--primary); font-weight: 700;">ممتاز</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="budgetProgressBar"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 0.85rem; color: var(--text-muted);">
+                        <span id="analyticsSpentText">المصروف: 0 ج.م</span>
+                        <span id="analyticsLimitText">السقف: 0 ج.م</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 4: Logs Content -->
+            <div id="logsTab" class="tab-content" style="display: none;">
+                <div class="logs-list" id="logsList">
+                    <!-- Logs Dynamic Generated -->
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+       SECTION 3: MODAL DIALOGS
+       ========================================================================== -->
+
+    <!-- Modal: Create Room -->
+    <div class="modal-overlay" id="createRoomModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">إنشاء غرفة جديدة</h3>
+                <button class="modal-close" onclick="closeModal('createRoomModal')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="form-group">
+                <label>اسم الغرفة</label>
+                <input type="text" id="newRoomName" class="form-control" placeholder="مثال: غرفة سكن VIP">
+            </div>
+            <div class="form-group">
+                <label>وصف الغرفة</label>
+                <input type="text" id="newRoomDesc" class="form-control" placeholder="وصف اختياري">
+            </div>
+            <div class="form-group">
+                <label>سقف الميزانية (ج.م)</label>
+                <input type="number" id="newRoomBudget" class="form-control" value="10000">
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('createRoomModal')">إلغاء</button>
+                <button class="btn btn-primary" onclick="submitCreateRoom()">إنشاء الغرفة</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add Member -->
+    <div class="modal-overlay" id="addMemberModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">إضافة عضو جديد</h3>
+                <button class="modal-close" onclick="closeModal('addMemberModal')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="form-group">
+                <label>اسم الشخص</label>
+                <input type="text" id="newMemberName" class="form-control" placeholder="مثال: أحمد العشري">
+            </div>
+            <div class="form-group">
+                <label>رقم الواتساب (دولياً أو بالصفر المحلي)</label>
+                <input type="text" id="newMemberPhone" class="form-control" placeholder="01000000000">
+            </div>
+            <div class="form-group">
+                <label>رقم المحفظة / الكاش</label>
+                <input type="text" id="newMemberCash" class="form-control" placeholder="رقم فودافون كاش أو إنستا باي">
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('addMemberModal')">إلغاء</button>
+                <button class="btn btn-primary" onclick="submitAddMember()">حفظ العضو</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add Transaction -->
+    <div class="modal-overlay" id="addTransactionModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">تسجيل معاملة مصاريف</h3>
+                <button class="modal-close" onclick="closeModal('addTransactionModal')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="form-group">
+                <label>عنوان المعاملة</label>
+                <input type="text" id="newTxTitle" class="form-control" placeholder="مثال: فاتورة الإنترنت / مشتريات">
+            </div>
+            <div class="form-group">
+                <label>المبلغ (ج.م)</label>
+                <input type="number" id="newTxAmount" class="form-control" placeholder="0.0">
+            </div>
+            <div class="form-group">
+                <label>الشخص الدافع</label>
+                <select id="newTxPaidBy" class="form-control"></select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('addTransactionModal')">إلغاء</button>
+                <button class="btn btn-primary" onclick="submitAddTransaction()">تسجيل المعاملة</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Import Room -->
+    <div class="modal-overlay" id="importRoomModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">استيراد بيانات غرفة</h3>
+                <button class="modal-close" onclick="closeModal('importRoomModal')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="form-group">
+                <label>ضع كود الغرفة المشفّر هنا</label>
+                <textarea id="importPayloadText" class="form-control" rows="5" placeholder="الصق الكود المشر المشترك هنا..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('importRoomModal')">إلغاء</button>
+                <button class="btn btn-primary" onclick="submitImportRoom()">استيراد وحفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Component -->
+    <div id="toast" class="toast">
+        <i class="fa-solid fa-circle-check" style="color: var(--primary);"></i>
+        <span id="toastMsg">تمت العملية بنجاح</span>
+    </div>
+
+    <!-- ==========================================================================
+       SECTION 4: JAVASCRIPT CONTROLLER & LOGIC ENGINE
+       ========================================================================== -->
+    <script>
+        // State Store Controller
+        let appState = {
+            rooms: [],
+            activeRoomId: null
+        };
+
+        // --- Core Initialization ---
+        window.addEventListener('DOMContentLoaded', () => {
+            loadFromLocalStorage();
+            if (appState.rooms.length === 0) {
+                seedDemoData();
+            }
+            renderRoomsDashboard();
+        });
+
+        // --- Persistence Layer ---
+        function saveToLocalStorage() {
+            localStorage.setItem('SMART_ROOMS_DATA_V1', JSON.stringify(appState.rooms));
+        }
+
+        function loadFromLocalStorage() {
+            const data = localStorage.getItem('SMART_ROOMS_DATA_V1');
+            if (data) {
+                try {
+                    appState.rooms = JSON.parse(data);
+                } catch(e) {
+                    appState.rooms = [];
                 }
-              },
-              child: const Text("إضافة"),
-            )
-          ],
-        ),
-      ),
-    );
-  }
+            }
+        }
 
-  void _showWhatsappActionSheet(RoomMember member) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Wrap(
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(color: Colors.grey[600], borderRadius: BorderRadius.circular(2)),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.send_outlined, color: Colors.greenAccent),
-              title: const Text("إرسال الملف اليومي والتقرير عبر الواتس"),
-              onTap: () {
-                Navigator.pop(context);
-                WhatsappService.sendWhatsappMessage(
-                  phone: member.phoneWhatsapp,
-                  message: WhatsappService.buildDailyReportMessage(member, widget.room),
-                );
-                RoomSyncEngine.shareRoomFile(widget.room);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.timer_10, color: Colors.orangeAccent),
-              title: const Text("إرسال رسالة تذكير الـ 10 أيام"),
-              onTap: () {
-                Navigator.pop(context);
-                WhatsappService.sendWhatsappMessage(
-                  phone: member.phoneWhatsapp,
-                  message: WhatsappService.buildDayReminderMessage(member, widget.room, 10),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.calendar_month, color: Colors.tealAccent),
-              title: const Text("إرسال رسالة تذكير الـ 30 يوم"),
-              onTap: () {
-                Navigator.pop(context);
-                WhatsappService.sendWhatsappMessage(
-                  phone: member.phoneWhatsapp,
-                  message: WhatsappService.buildDayReminderMessage(member, widget.room, 30),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+        function seedDemoData() {
+            const demoRoom = {
+                id: '101',
+                name: 'غرفة إشارات VIP الخاصة',
+                desc: 'إدارة الحسابات اليومية والمشاركات والواتساب',
+                budget: 20000,
+                members: [
+                    { id: 'm1', name: 'أحمد العشري', phone: '01000000000', cash: '01000000000' },
+                    { id: 'm2', name: 'محمد علي', phone: '01100000000', cash: '01100000000' }
+                ],
+                transactions: [
+                    { id: 't1', title: 'مصاريف إشارات وسيرفرات', amount: 1500, paidBy: 'm1', date: new Date().toLocaleDateString('ar-EG') }
+                ],
+                logs: [
+                    { id: 'l1', text: 'تم إنشاء الغرفة بنجاح وبدء تشغيل النظام.', date: new Date().toLocaleString('ar-EG') }
+                ]
+            };
+            appState.rooms.push(demoRoom);
+            saveToLocalStorage();
+        }
 
-  @override
-  Widget build(BuildContext context) {
-    Map<String, double> memberBalances = RoomAnalytics.calculateMemberBalances(widget.room);
+        // --- Navigation / Views Switcher ---
+        function showDashboardView() {
+            document.getElementById('roomDetailView').classList.remove('active');
+            document.getElementById('dashboardView').classList.add('active');
+            appState.activeRoomId = null;
+            renderRoomsDashboard();
+        }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.room.roomName),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.ios_share),
-            tooltip: "مشاركة الملف اليومي",
-            onPressed: () => RoomSyncEngine.shareRoomFile(widget.room),
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.people), text: "الأعضاء"),
-            Tab(icon: Icon(Icons.receipt), text: "المصاريف"),
-            Tab(icon: Icon(Icons.analytics), text: "التحليلات"),
-            Tab(icon: Icon(Icons.history), text: "السجل"),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // TAB 1: MEMBERS & WHATSAPP
-          ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: widget.room.members.length,
-            itemBuilder: (context, i) {
-              final member = widget.room.members[i];
-              double balance = memberBalances[member.id] ?? 0.0;
+        function showRoomDetailView(roomId) {
+            appState.activeRoomId = roomId;
+            document.getElementById('dashboardView').classList.remove('active');
+            document.getElementById('roomDetailView').classList.add('active');
+            renderRoomDetails();
+        }
 
-              return Card(
-                margin: const EdgeInsets.symmetric(vertical: 6),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    children: [
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: CircleAvatar(
-                          backgroundColor: Colors.teal,
-                          child: Text(member.name.isNotEmpty ? member.name[0] : "?"),
-                        ),
-                        title: Text(member.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                const Icon(Icons.phone, size: 14, color: Colors.green),
-                                const SizedBox(width: 4),
-                                Text("واتس: ${member.phoneWhatsapp.isEmpty ? 'غير مضاف' : member.phoneWhatsapp}"),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            Row(
-                              children: [
-                                const Icon(Icons.account_balance_wallet, size: 14, color: Colors.amber),
-                                const SizedBox(width: 4),
-                                Text("الكاش: ${member.cashNumber.isEmpty ? 'غير مضاف' : member.cashNumber}"),
-                              ],
-                            ),
-                          ],
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.chat, color: Colors.green, size: 28),
-                          tooltip: "تواصل وتذكيرات الواتساب",
-                          onPressed: () => _showWhatsappActionSheet(member),
-                        ),
-                      ),
-                      const Divider(),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text("الرصيد/التسوية:", style: TextStyle(color: Colors.grey[400], fontSize: 12)),
-                          Text(
-                            balance >= 0
-                                ? "+${balance.toStringAsFixed(1)} ج.م (له)"
-                                : "${balance.toStringAsFixed(1)} ج.م (عليه)",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: balance >= 0 ? Colors.greenAccent : Colors.redAccent,
-                            ),
-                          )
-                        ],
-                      )
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
+        function switchTab(tabId, btnElement) {
+            document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(tabId).style.display = 'block';
+            btnElement.classList.add('active');
+        }
 
-          // TAB 2: TRANSACTIONS LIST
-          ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: widget.room.transactions.length,
-            itemBuilder: (context, i) {
-              final tx = widget.room.transactions[i];
-              return Card(
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                child: ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Colors.black45,
-                    child: Icon(Icons.monetization_on, color: Colors.tealAccent),
-                  ),
-                  title: Text(tx.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text("${tx.timestamp.day}/${tx.timestamp.month} - التصنيف: ${tx.category}"),
-                  trailing: Text(
-                    "${tx.amount} ج.م",
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.tealAccent, fontSize: 16),
-                  ),
-                ),
-              );
-            },
-          ),
+        // --- Render Engine ---
+        function renderRoomsDashboard() {
+            const grid = document.getElementById('roomsGrid');
+            const countBadge = document.getElementById('roomsCountBadge');
+            grid.innerHTML = '';
 
-          // TAB 3: FINANCIAL ANALYTICS
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("مؤشرات الميزانية والإنفاق", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text("صحة الميزانية:"),
-                            Text(
-                              RoomAnalytics.getBudgetHealthStatus(widget.room),
-                              style: const TextStyle(color: Colors.tealAccent, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        LinearProgressIndicator(
-                          value: (RoomAnalytics.calculateTotalExpenses(widget.room) / widget.room.budgetLimit)
-                              .clamp(0.0, 1.0),
-                          backgroundColor: Colors.grey[800],
-                          color: Colors.teal,
-                          minHeight: 8,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+            countBadge.innerText = `إجمالي الغرف: ${appState.rooms.length}`;
 
-          // TAB 4: AUDIT LOGS
-          ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: widget.room.activityLogs.length,
-            itemBuilder: (context, i) {
-              final log = widget.room.activityLogs[i];
-              return ListTile(
-                leading: const Icon(Icons.check_circle_outline, color: Colors.teal),
-                title: Text(log.description),
-                subtitle: Text(log.timestamp.toString()),
-              );
-            },
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          if (_tabController.index == 0) {
-            _addMemberDialog();
-          } else if (_tabController.index == 1) {
-            _addTransactionDialog();
-          }
-        },
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-}
+            if(appState.rooms.length === 0) {
+                grid.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 2rem;">لا توجد غرف مضافة حالياً. اضغط "غرفة جديدة" للبدء!</p>`;
+                return;
+            }
+
+            appState.rooms.forEach(room => {
+                const totalExpenses = room.transactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+                
+                const card = document.createElement('div');
+                card.className = 'room-card';
+                card.onclick = () => showRoomDetailView(room.id);
+                card.innerHTML = `
+                    <div class="room-card-header">
+                        <div class="room-card-title">${escapeHtml(room.name)}</div>
+                        <span class="room-badge">أونلاين</span>
+                    </div>
+                    <div class="room-card-desc">${escapeHtml(room.desc || 'لا يوجد وصف مضاف')}</div>
+                    <div class="room-card-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">المصاريف</span>
+                            <span class="stat-value">${totalExpenses.toFixed(1)} ج.م</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">الأعضاء</span>
+                            <span class="stat-value" style="color: var(--text-main);">${room.members.length} عضو</span>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function renderRoomDetails() {
+            const room = appState.rooms.find(r => r.id === appState.activeRoomId);
+            if (!room) return;
+
+            document.getElementById('currentRoomTitle').innerText = room.name;
+            document.getElementById('currentRoomDesc').innerText = room.desc || 'لا يوجد وصف مضاف للغرفة';
+
+            // Calculate Balances
+            const totalSpent = room.transactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+            const sharePerMember = room.members.length > 0 ? totalSpent / room.members.length : 0;
+
+            // Render Members
+            const membersList = document.getElementById('membersList');
+            membersList.innerHTML = '';
+
+            if (room.members.length === 0) {
+                membersList.innerHTML = `<p style="text-align: center; color: var(--text-muted); padding: 1rem;">لا يوجد أعضاء في الغرفة.</p>`;
+            } else {
+                room.members.forEach(member => {
+                    const paidByThisMember = room.transactions
+                        .filter(t => t.paidBy === member.id)
+                        .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+                    
+                    const balance = paidByThisMember - sharePerMember;
+                    const isPositive = balance >= 0;
+
+                    const el = document.createElement('div');
+                    el.className = 'member-card';
+                    el.innerHTML = `
+                        <div class="member-info">
+                            <div class="avatar">${escapeHtml(member.name.charAt(0))}</div>
+                            <div class="member-details">
+                                <h4>${escapeHtml(member.name)}</h4>
+                                <p><i class="fa-solid fa-phone" style="color: var(--success);"></i> واتس: ${escapeHtml(member.phone || 'غير مسجل')}</p>
+                                <p><i class="fa-solid fa-wallet" style="color: var(--warning);"></i> كاش: ${escapeHtml(member.cash || 'غير مسجل')}</p>
+                            </div>
+                        </div>
+                        <div class="member-balance">
+                            <div>
+                                <div class="balance-title">الرصيد/التسوية</div>
+                                <div class="balance-amount ${isPositive ? 'positive' : 'negative'}">
+                                    ${isPositive ? '+' : ''}${balance.toFixed(1)} ج.م (${isPositive ? 'له' : 'عليه'})
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 6px; margin-top: 6px;">
+                                <button class="btn btn-whatsapp btn-sm" onclick="sendWhatsappReminder('${member.phone}', '${member.name}', 10)">تذكير 10d</button>
+                                <button class="btn btn-whatsapp btn-sm" onclick="sendWhatsappReminder('${member.phone}', '${member.name}', 30)">تذكير 30d</button>
+                            </div>
+                        </div>
+                    `;
+                    membersList.appendChild(el);
+                });
+            }
+
+            // Render Transactions
+            const txList = document.getElementById('transactionsList');
+            txList.innerHTML = '';
+            if(room.transactions.length === 0) {
+                txList.innerHTML = `<p style="text-align: center; color: var(--text-muted); padding: 1rem;">لا توجد معاملات مسجلة.</p>`;
+            } else {
+                room.transactions.forEach(tx => {
+                    const payer = room.members.find(m => m.id === tx.paidBy);
+                    const el = document.createElement('div');
+                    el.className = 'transaction-card';
+                    el.innerHTML = `
+                        <div>
+                            <h4 style="font-size: 0.95rem;">${escapeHtml(tx.title)}</h4>
+                            <p style="font-size: 0.8rem; color: var(--text-muted);">دافع المبلغ: ${payer ? escapeHtml(payer.name) : 'غير معروف'}</p>
+                        </div>
+                        <div style="font-weight: 700; color: var(--primary); font-size: 1.1rem;">
+                            ${parseFloat(tx.amount).toFixed(1)} ج.م
+                        </div>
+                    `;
+                    txList.appendChild(el);
+                });
+            }
+
+            // Render Analytics
+            const percentage = Math.min((totalSpent / (room.budget || 10000)) * 100, 100);
+            document.getElementById('budgetProgressBar').style.width = percentage + '%';
+            document.getElementById('analyticsSpentText').innerText = `المصروف: ${totalSpent.toFixed(1)} ج.م`;
+            document.getElementById('analyticsLimitText').innerText = `السقف: ${(room.budget || 10000)} ج.م`;
+
+            // Render Logs
+            const logsList = document.getElementById('logsList');
+            logsList.innerHTML = '';
+            room.logs.forEach(log => {
+                const el = document.createElement('div');
+                el.className = 'log-card';
+                el.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <i class="fa-solid fa-circle-check" style="color: var(--primary);"></i>
+                        <span style="font-size: 0.9rem;">${escapeHtml(log.text)}</span>
+                    </div>
+                    <span style="font-size: 0.75rem; color: var(--text-muted);">${log.date}</span>
+                `;
+                logsList.appendChild(el);
+            });
+        }
+
+        // --- Action Handlers & Dialogs ---
+        function openModal(id) { document.getElementById(id).classList.add('open'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+        function openCreateRoomModal() { openModal('createRoomModal'); }
+        function submitCreateRoom() {
+            const name = document.getElementById('newRoomName').value.trim();
+            const desc = document.getElementById('newRoomDesc').value.trim();
+            const budget = parseFloat(document.getElementById('newRoomBudget').value) || 10000;
+
+            if (!name) return showToast('يرجى كتابة اسم الغرفة!');
+
+            const newRoom = {
+                id: Date.now().toString(),
+                name,
+                desc,
+                budget,
+                members: [],
+                transactions: [],
+                logs: [{ id: 'l_' + Date.now(), text: 'تم إنشاء الغرفة جديداً', date: new Date().toLocaleString('ar-EG') }]
+            };
+
+            appState.rooms.push(newRoom);
+            saveToLocalStorage();
+            closeModal('createRoomModal');
+            showToast('تم إنشاء الغرفة بنجاح!');
+            renderRoomsDashboard();
+
+            document.getElementById('newRoomName').value = '';
+            document.getElementById('newRoomDesc').value = '';
+        }
+
+        function openAddMemberModal() { openModal('addMemberModal'); }
+        function submitAddMember() {
+            const name = document.getElementById('newMemberName').value.trim();
+            const phone = document.getElementById('newMemberPhone').value.trim();
+            const cash = document.getElementById('newMemberCash').value.trim();
+
+            if(!name) return showToast('يرجى إدخال اسم العضو!');
+
+            const room = appState.rooms.find(r => r.id === appState.activeRoomId);
+            if(room) {
+                room.members.push({ id: 'm_' + Date.now(), name, phone, cash });
+                room.logs.unshift({ id: 'l_' + Date.now(), text: `تم إضافة العضو [${name}]`, date: new Date().toLocaleString('ar-EG') });
+                saveToLocalStorage();
+                closeModal('addMemberModal');
+                showToast('تم إضافة العضو بنجاح!');
+                renderRoomDetails();
+
+                document.getElementById('newMemberName').value = '';
+                document.getElementById('newMemberPhone').value = '';
+                document.getElementById('newMemberCash').value = '';
+            }
+        }
+
+        function openAddTransactionModal() {
+            const room = appState.rooms.find(r => r.id === appState.activeRoomId);
+            if(!room || room.members.length === 0) {
+                return showToast('يجب إضافة أعضاء للغرفة أولاً لتسجيل المصاريف!');
+            }
+            const select = document.getElementById('newTxPaidBy');
+            select.innerHTML = room.members.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+            openModal('addTransactionModal');
+        }
+
+        function submitAddTransaction() {
+            const title = document.getElementById('newTxTitle').value.trim();
+            const amount = parseFloat(document.getElementById('newTxAmount').value);
+            const paidBy = document.getElementById('newTxPaidBy').value;
+
+            if(!title || isNaN(amount) || amount <= 0) return showToast('يرجى ملء البيانات بشكل صحيح!');
+
+            const room = appState.rooms.find(r => r.id === appState.activeRoomId);
+            if(room) {
+                room.transactions.push({
+                    id: 't_' + Date.now(),
+                    title,
+                    amount,
+                    paidBy,
+                    date: new Date().toLocaleDateString('ar-EG')
+                });
+                room.logs.unshift({ id: 'l_' + Date.now(), text: `تسجيل معاملة بقيمة (${amount} ج.م)`, date: new Date().toLocaleString('ar-EG') });
+                saveToLocalStorage();
+                closeModal('addTransactionModal');
+                showToast('تم إضافة المعاملة بنجاح!');
+                renderRoomDetails();
+
+                document.getElementById('newTxTitle').value = '';
+                document.getElementById('newTxAmount').value = '';
+            }
+        }
+
+        function deleteCurrentRoom() {
+            if(confirm('هل أنت تأكد من رغبتك في حذف هذه الغرفة بالكامل؟')) {
+                appState.rooms = appState.rooms.filter(r => r.id !== appState.activeRoomId);
+                saveToLocalStorage();
+                showToast('تم حذف الغرفة!');
+                showDashboardView();
+            }
+        }
+
+        // --- Encrypted Export/Import Engine ---
+        function exportCurrentRoom() {
+            const room = appState.rooms.find(r => r.id === appState.activeRoomId);
+            if(!room) return;
+
+            const jsonStr = JSON.stringify(room);
+            const encrypted = btoa(unescape(encodeURIComponent(jsonStr))); // Base64 Safe Encoding
+
+            navigator.clipboard.writeText(encrypted).then(() => {
+                showToast('تم نسخ كود الغرفة المشفر إلى الحافظة!');
+            }).catch(() => {
+                alert('كود الغرفة المشفّر للتصدير:\n\n' + encrypted);
+            });
+        }
+
+        function openImportModal() { openModal('importRoomModal'); }
+        function submitImportRoom() {
+            const code = document.getElementById('importPayloadText').value.trim();
+            if(!code) return showToast('قم بلصق الكود أولاً!');
+
+            try {
+                const decodedJson = decodeURIComponent(escape(atob(code)));
+                const room = JSON.parse(decodedJson);
+
+                if(!room.id || !room.name) throw new Error();
+
+                // Replace if exists, else add
+                appState.rooms = appState.rooms.filter(r => r.id !== room.id);
+                appState.rooms.push(room);
+                saveToLocalStorage();
+
+                closeModal('importRoomModal');
+                showToast('تم استيراد الغرفة بنجاح!');
+                renderRoomsDashboard();
+                document.getElementById('importPayloadText').value = '';
+            } catch(e) {
+                showToast('عفواً! الكود غير صالح أو تالف.');
+            }
+        }
+
+        // --- WhatsApp Integration ---
+        function sendWhatsappReminder(phone, name, days) {
+            if(!phone) return showToast('العضو لا يمتلك رقم واتس مسجل!');
+            let formattedPhone = phone.replace(/\D/g, '');
+            if(!formattedPhone.startsWith('20') && formattedPhone.length === 11) {
+                formattedPhone = '20' + formattedPhone;
+            }
+
+            const room = appState.rooms.find(r => r.id === appState.activeRoomId);
+            const msg = `السلام عليكم يا ${name} ✋💖\n\n📅 تذكير دوري لـ (${days} يوم) لغرفة: ${room ? room.name : ''}\n------------------------------------\nيرجى فتح التطبيق لمراجعة الحسابات والتسويات الحالية 🟢.\nدمت بخير!`;
+
+            const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`;
+            window.open(url, '_blank');
+        }
+
+        // --- Utilities ---
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        function escapeHtml(str) {
+            return String(str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
+    </script>
+</body>
+</html>
