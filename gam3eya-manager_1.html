@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>مدير الجمعية والغرف | Gam3eya Room Manager</title>
+<!--
+  ملف واحد مستقل تماماً: لا يحتاج إنترنت أبداً (بدون أي CDN أو خطوط خارجية).
+  يعمل بفتحه مباشرة (دبل كليك) على كمبيوتر أو تليفون، أو برفعه بدون تعديل على GitHub Pages.
+-->
+<style>
+:root{
+  --bg:#101418; --card:#1c2229; --card-h:#252d37; --dialog:#222a33;
+  --primary:#00bfa5; --primary-h:#00a892; --text:#f1f5f9; --muted:#94a3b8;
+  --border:#334155; --danger:#ef4444; --warning:#f59e0b; --success:#10b981;
+  --wa:#25d366; --shadow:0 10px 25px -5px rgba(0,0,0,.5),0 4px 6px -2px rgba(0,0,0,.3);
+  --tr:all .2s ease-in-out; --radius:14px;
+}
+[data-theme="light"]{
+  --bg:#eef2f5; --card:#ffffff; --card-h:#f4f6f8; --dialog:#ffffff;
+  --text:#101418; --muted:#5b6673; --border:#dbe1e8;
+  --shadow:0 10px 20px -6px rgba(20,30,40,.12),0 4px 6px -2px rgba(20,30,40,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0;font-family:"Segoe UI","Tahoma",Arial,sans-serif;}
+body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden;transition:var(--tr);}
+header{background:var(--card);border-bottom:1px solid var(--border);padding:.9rem 1.5rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;box-shadow:var(--shadow);gap:.6rem;flex-wrap:wrap;}
+header .logo{display:flex;align-items:center;gap:10px;}
+header .logo span.emoji{font-size:1.7rem;}
+header .logo h1{font-size:1.15rem;font-weight:800;}
+header .logo small{display:block;color:var(--muted);font-size:.7rem;font-weight:500;}
+.header-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.btn{background:var(--card);color:var(--text);border:1px solid var(--border);padding:.55rem 1rem;border-radius:9px;cursor:pointer;font-weight:700;display:inline-flex;align-items:center;gap:6px;transition:var(--tr);font-size:.85rem;}
+.btn:hover{background:var(--card-h);border-color:var(--primary);}
+.btn-primary{background:var(--primary);color:#00201c;border:none;}
+.btn-primary:hover{background:var(--primary-h);box-shadow:0 0 12px rgba(0,191,165,.4);}
+.btn-wa{background:rgba(37,211,102,.15);color:var(--wa);border:1px solid var(--wa);}
+.btn-wa:hover{background:var(--wa);color:#04210f;}
+.btn-danger{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid var(--danger);}
+.btn-danger:hover{background:var(--danger);color:#fff;}
+.btn-sm{padding:.3rem .6rem;font-size:.75rem;border-radius:7px;}
+.btn-icon{padding:.5rem;line-height:1;}
+.container{max-width:1200px;margin:1.5rem auto;padding:0 1.2rem;width:100%;flex:1;}
+.view-section{display:none;animation:fadeIn .25s ease-in-out forwards;}
+.view-section.active{display:block;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+.toolbar{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem;}
+.toolbar input,.toolbar select{background:var(--card);border:1px solid var(--border);color:var(--text);padding:.5rem .8rem;border-radius:8px;font-size:.85rem;}
+.summary-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.7rem;margin-bottom:1.2rem;}
+.summary-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:.8rem 1rem;}
+.summary-box .lbl{font-size:.7rem;color:var(--muted);}
+.summary-box .val{font-size:1.25rem;font-weight:800;color:var(--primary);margin-top:2px;}
+.banner{background:rgba(245,158,11,.12);border:1px solid var(--warning);color:var(--warning);padding:.7rem 1rem;border-radius:10px;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;font-size:.85rem;font-weight:600;}
+.rooms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1.2rem;}
+.room-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.3rem;cursor:pointer;transition:var(--tr);position:relative;}
+.room-card:hover{transform:translateY(-4px);border-color:var(--primary);box-shadow:var(--shadow);}
+.room-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.7rem;gap:.5rem;}
+.room-card-title{font-size:1.1rem;font-weight:800;}
+.room-badge{background:rgba(0,191,165,.15);color:var(--primary);border:1px solid var(--primary);padding:.15rem .55rem;border-radius:20px;font-size:.7rem;font-weight:700;white-space:nowrap;}
+.room-badge.archived{background:rgba(148,163,184,.15);color:var(--muted);border-color:var(--muted);}
+.room-card-desc{color:var(--muted);font-size:.8rem;margin-bottom:1rem;line-height:1.4;min-height:2.2em;}
+.room-card-stats{display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:.8rem;font-size:.8rem;}
+.stat-item{display:flex;flex-direction:column;}
+.stat-label{font-size:.68rem;color:var(--muted);}
+.stat-value{font-size:1rem;font-weight:800;color:var(--primary);margin-top:1px;}
+.room-detail-header{display:flex;align-items:center;justify-content:space-between;background:var(--card);padding:1.2rem;border-radius:var(--radius);border:1px solid var(--border);margin-bottom:1.2rem;flex-wrap:wrap;gap:.7rem;}
+.tabs-header{display:flex;gap:6px;border-bottom:1px solid var(--border);margin-bottom:1.2rem;overflow-x:auto;}
+.tab-btn{padding:.7rem 1.1rem;background:none;border:none;color:var(--muted);font-size:.88rem;font-weight:700;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;display:flex;align-items:center;gap:6px;}
+.tab-btn:hover{color:var(--text);}
+.tab-btn.active{color:var(--primary);border-bottom-color:var(--primary);}
+.card-list{display:flex;flex-direction:column;gap:.7rem;}
+.member-card,.tx-card,.log-card{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:1rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.6rem;}
+.member-info{display:flex;align-items:center;gap:.8rem;}
+.avatar{width:42px;height:42px;min-width:42px;border-radius:50%;background:var(--primary);color:#00201c;display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:800;}
+.member-details h4{font-size:.92rem;font-weight:800;}
+.member-details p{font-size:.75rem;color:var(--muted);margin-top:2px;}
+.member-actions{display:flex;gap:5px;flex-wrap:wrap;}
+.balance-amount{font-size:1rem;font-weight:800;}
+.balance-amount.positive{color:var(--success);}
+.balance-amount.negative{color:var(--danger);}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:1000;opacity:0;pointer-events:none;transition:var(--tr);backdrop-filter:blur(3px);padding:1rem;}
+.modal-overlay.open{opacity:1;pointer-events:all;}
+.modal{background:var(--dialog);border:1px solid var(--border);border-radius:16px;width:100%;max-width:520px;padding:1.6rem;box-shadow:var(--shadow);transform:scale(.94);transition:var(--tr);max-height:90vh;overflow-y:auto;}
+.modal.wide{max-width:760px;}
+.modal-overlay.open .modal{transform:scale(1);}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.2rem;}
+.modal-title{font-size:1.1rem;font-weight:800;}
+.modal-close{background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;line-height:1;}
+.modal-close:hover{color:var(--text);}
+.form-group{margin-bottom:1rem;}
+.form-group label{display:block;font-size:.8rem;font-weight:700;margin-bottom:.4rem;color:var(--muted);}
+.form-control{width:100%;padding:.65rem .9rem;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.9rem;outline:none;}
+.form-control:focus{border-color:var(--primary);}
+.form-row{display:flex;gap:.7rem;}
+.form-row>*{flex:1;}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:1.3rem;flex-wrap:wrap;}
+.hint{font-size:.72rem;color:var(--muted);margin-top:.3rem;}
+.analytics-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.3rem;margin-bottom:1.2rem;}
+.progress-bar-container{width:100%;height:9px;background:var(--border);border-radius:5px;overflow:hidden;margin-top:8px;}
+.progress-bar{height:100%;background:var(--primary);width:0%;transition:width .4s ease;}
+.toast{position:fixed;bottom:20px;left:20px;right:20px;max-width:380px;background:var(--card);border:1px solid var(--primary);color:var(--text);padding:.9rem 1.2rem;border-radius:10px;box-shadow:var(--shadow);display:flex;align-items:center;gap:10px;z-index:2000;transform:translateY(120px);opacity:0;transition:var(--tr);font-size:.85rem;font-weight:600;}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.error{border-color:var(--danger);}
+.empty-state{text-align:center;color:var(--muted);padding:2.5rem 1rem;font-size:.9rem;}
+table.sched{width:100%;border-collapse:collapse;font-size:.82rem;}
+table.sched th,table.sched td{padding:.55rem .5rem;border-bottom:1px solid var(--border);text-align:center;}
+table.sched th{color:var(--muted);font-size:.72rem;}
+.day-row.received td{color:var(--success);}
+.day-row.current-day{background:rgba(0,191,165,.08);}
+.order-list{list-style:none;display:flex;flex-direction:column;gap:6px;}
+.order-item{display:flex;align-items:center;justify-content:space-between;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.5rem .8rem;font-size:.85rem;}
+.order-item .idx{color:var(--primary);font-weight:800;margin-left:8px;}
+.order-item .ctrl{display:flex;gap:4px;}
+.chip{display:inline-block;padding:.15rem .55rem;border-radius:20px;font-size:.68rem;font-weight:700;}
+.chip.turn{background:rgba(0,191,165,.15);color:var(--primary);border:1px solid var(--primary);}
+.chip.paid{background:rgba(16,185,129,.15);color:var(--success);}
+.chip.unpaid{background:rgba(239,68,68,.15);color:var(--danger);}
+.payments-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;margin-top:8px;padding:8px;background:var(--bg);border-radius:8px;}
+.payments-grid label{display:flex;align-items:center;gap:6px;font-size:.78rem;cursor:pointer;}
+footer{text-align:center;padding:1.2rem;color:var(--muted);font-size:.75rem;}
+footer #versionTag{cursor:pointer;text-decoration:underline dotted;}
+.switch{position:relative;display:inline-block;width:42px;height:24px;}
+.switch input{opacity:0;width:0;height:0;}
+.slider{position:absolute;cursor:pointer;inset:0;background:var(--border);transition:.2s;border-radius:24px;}
+.slider:before{position:absolute;content:"";height:18px;width:18px;left:3px;bottom:3px;background:#fff;transition:.2s;border-radius:50%;}
+input:checked+.slider{background:var(--primary);}
+input:checked+.slider:before{transform:translateX(-18px);}
+@media(max-width:768px){
+  header{padding:.8rem;} .container{padding:0 .8rem;}
+  .member-card,.tx-card{flex-direction:column;align-items:flex-start;}
+  table.sched{font-size:.72rem;}
+  .modal{padding:1.1rem;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span class="emoji">🏘️</span>
+    <div><h1>مدير الجمعية والغرف</h1><small id="onlineNote">يعمل بالكامل بدون إنترنت</small></div>
+  </div>
+  <div class="header-actions">
+    <input type="text" id="dashSearch" class="form-control" placeholder="🔍 بحث عن غرفة..." style="width:160px;padding:.5rem .8rem;" oninput="renderRoomsDashboard()">
+    <button class="btn" onclick="toggleTheme()" id="themeBtn">🌙 الوضع الليلي</button>
+    <button class="btn" onclick="openImportModal()">📥 استيراد غرفة</button>
+    <button class="btn" onclick="openAdminGate()">🔒 الإدارة</button>
+    <button class="btn btn-primary" onclick="openCreateRoomModal()">➕ غرفة جديدة</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <section id="dashboardView" class="view-section active">
+    <div id="backupBanner"></div>
+    <div class="summary-strip" id="globalSummary"></div>
+    <div class="toolbar">
+      <h2 style="flex:1;">الغرف الحالية</h2>
+      <select id="sortSelect" onchange="renderRoomsDashboard()">
+        <option value="new">الأحدث أولاً</option>
+        <option value="name">الاسم أبجدياً</option>
+        <option value="members">عدد الأعضاء</option>
+        <option value="pool">أكبر تحصيل شهري</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);">
+        <input type="checkbox" id="showArchived" onchange="renderRoomsDashboard()"> عرض الغرف المؤرشفة
+      </label>
+    </div>
+    <div class="rooms-grid" id="roomsGrid"></div>
+  </section>
+
+  <section id="roomDetailView" class="view-section">
+    <div class="room-detail-header">
+      <div>
+        <button class="btn btn-sm" onclick="showDashboardView()">➡️ العودة للرئيسية</button>
+        <h2 id="currentRoomTitle" style="margin-top:.5rem;">اسم الغرفة</h2>
+        <p id="currentRoomDesc" style="color:var(--muted);font-size:.85rem;"></p>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn" onclick="printRoom()">🖨️ طباعة</button>
+        <button class="btn btn-sm" onclick="openEditRoomModal()">✏️ تعديل</button>
+        <button class="btn btn-wa" onclick="exportCurrentRoom()">📤 مشاركة/تصدير</button>
+        <button class="btn btn-sm" onclick="archiveCurrentRoom()">🗄️ أرشفة</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteCurrentRoom()">🗑️ حذف</button>
+      </div>
+    </div>
+
+    <div class="tabs-header">
+      <button class="tab-btn active" data-tab="membersTab" onclick="switchTab('membersTab',this)">👥 الأعضاء</button>
+      <button class="tab-btn" data-tab="gamiyaTab" onclick="switchTab('gamiyaTab',this)">🔄 الجمعية</button>
+      <button class="tab-btn" data-tab="txTab" onclick="switchTab('txTab',this)">🧾 مصاريف عامة</button>
+      <button class="tab-btn" data-tab="analyticsTab" onclick="switchTab('analyticsTab',this)">📊 التحليلات</button>
+      <button class="tab-btn" data-tab="logsTab" onclick="switchTab('logsTab',this)">🕒 السجل</button>
+    </div>
+
+    <div id="membersTab" class="tab-content">
+      <div class="toolbar">
+        <input type="text" id="memberSearch" class="form-control" placeholder="بحث عن عضو..." style="flex:1;min-width:160px;" oninput="renderRoomDetails()">
+        <button class="btn btn-primary btn-sm" onclick="openAddMemberModal()">👤➕ إضافة عضو</button>
+      </div>
+      <div class="card-list" id="membersList"></div>
+    </div>
+
+    <div id="gamiyaTab" class="tab-content" style="display:none;">
+      <div class="analytics-card">
+        <div class="toolbar" style="margin-bottom:.5rem;">
+          <h3 style="flex:1;">إعدادات الجمعية اليومية</h3>
+          <button class="btn btn-sm" onclick="openGamiyaSettingsModal()">⚙️ الإعدادات</button>
+        </div>
+        <div id="gamiyaSummary" style="font-size:.85rem;color:var(--muted);line-height:1.9;"></div>
+        <div class="modal-actions" style="justify-content:flex-start;margin-top:1rem;">
+          <button class="btn btn-primary btn-sm" onclick="generateSchedule()">🔄 توليد جدول شهري جديد (10 أيام × 3)</button>
+          <button class="btn btn-wa btn-sm" onclick="remindUnpaidToday()">💬 تذكير من لم يدفع اليوم</button>
+        </div>
+      </div>
+
+      <div class="analytics-card">
+        <h3 style="margin-bottom:.7rem;">جدول التحصيل اليومي (الدور يتعكس: عادي ← عكسي ← عادي)</h3>
+        <div style="overflow-x:auto;">
+          <table class="sched" id="scheduleTable"></table>
+        </div>
+      </div>
+
+      <div class="analytics-card">
+        <h3 style="margin-bottom:.7rem;">ملخص الأعضاء - مين دفع ومين لأ (تراكمي)</h3>
+        <div class="card-list" id="gamiyaMembersSummary"></div>
+      </div>
+
+      <div class="analytics-card">
+        <div class="toolbar" style="margin-bottom:.5rem;">
+          <h3 style="flex:1;">الدور الشهري الكبير (تجميع 30 ألف لعضو واحد شهرياً)</h3>
+        </div>
+        <p class="hint">كل الأعضاء العشرة يجمعوا نصيبهم الشهري (مثال: 3000 جنيه للفرد) في وعاء واحد، وياخده عضو مختلف كل شهر بالترتيب.</p>
+        <ul class="order-list" id="bigRoundList" style="margin-top:.8rem;"></ul>
+        <div class="modal-actions" style="justify-content:flex-start;">
+          <button class="btn btn-primary btn-sm" onclick="collectBigRound()">✅ تسجيل استلام دور هذا الشهر والانتقال للتالي</button>
+        </div>
+        <h4 style="margin-top:1.2rem;font-size:.85rem;color:var(--muted);">سجل الأدوار السابقة</h4>
+        <div class="card-list" id="bigRoundHistory" style="margin-top:.5rem;"></div>
+      </div>
+    </div>
+
+    <div id="txTab" class="tab-content" style="display:none;">
+      <div class="toolbar">
+        <input type="text" id="txSearch" class="form-control" placeholder="بحث في المصاريف..." style="flex:1;min-width:160px;" oninput="renderRoomDetails()">
+        <button class="btn btn-primary btn-sm" onclick="openAddTransactionModal()">🛒➕ إضافة معاملة</button>
+        <button class="btn btn-sm" onclick="exportTransactionsCSV()">⬇️ CSV</button>
+      </div>
+      <div class="card-list" id="transactionsList"></div>
+    </div>
+
+    <div id="analyticsTab" class="tab-content" style="display:none;">
+      <div class="analytics-card">
+        <div class="toolbar" style="margin-bottom:.3rem;">
+          <h4 style="flex:1;">مؤشر ميزانية المصاريف العامة</h4>
+          <span id="budgetHealthStatus" style="color:var(--primary);font-weight:800;">ممتاز</span>
+        </div>
+        <div class="progress-bar-container"><div class="progress-bar" id="budgetProgressBar"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:.8rem;color:var(--muted);">
+          <span id="analyticsSpentText"></span><span id="analyticsLimitText"></span>
+        </div>
+      </div>
+      <div class="analytics-card">
+        <h4 style="margin-bottom:.8rem;">مساهمة كل عضو في الجمعية اليومية (تراكمي)</h4>
+        <div id="barChart"></div>
+      </div>
+    </div>
+
+    <div id="logsTab" class="tab-content" style="display:none;">
+      <div class="card-list" id="logsList"></div>
+    </div>
+  </section>
+</div>
+
+<footer>Gam3eya Room Manager — إصدار <span id="versionTag" onclick="openAdminGate()">2.0.0</span> — بياناتك محفوظة محلياً على جهازك فقط</footer>
+
+<!-- ===== Modals ===== -->
+<div class="modal-overlay" id="createRoomModal">
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title" id="roomModalTitle">إنشاء غرفة جديدة</h3><button class="modal-close" onclick="closeModal('createRoomModal')">✖</button></div>
+    <div class="form-group"><label>اسم الغرفة</label><input id="newRoomName" class="form-control" placeholder="مثال: جمعية العشرة"></div>
+    <div class="form-group"><label>وصف الغرفة</label><input id="newRoomDesc" class="form-control" placeholder="وصف اختياري"></div>
+    <div class="form-row">
+      <div class="form-group"><label>سقف ميزانية المصاريف العامة (ج.م)</label><input type="number" id="newRoomBudget" class="form-control" value="10000"></div>
+      <div class="form-group"><label>قسط الفرد اليومي بالجمعية (ج.م)</label><input type="number" id="newRoomInstallment" class="form-control" value="100"></div>
+    </div>
+    <p class="hint">مثال: 10 أعضاء × 100 ج = 1000 ج تحصيل يومي، يجمعها عضو مختلف كل يوم بالترتيب.</p>
+    <input type="hidden" id="editRoomId">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('createRoomModal')">إلغاء</button><button class="btn btn-primary" onclick="submitCreateRoom()">حفظ</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="addMemberModal">
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title" id="memberModalTitle">إضافة عضو جديد</h3><button class="modal-close" onclick="closeModal('addMemberModal')">✖</button></div>
+    <div class="form-group"><label>اسم الشخص</label><input id="newMemberName" class="form-control" placeholder="مثال: أحمد العشري"></div>
+    <div class="form-row">
+      <div class="form-group"><label>رقم الواتساب</label><input id="newMemberPhone" class="form-control" placeholder="01000000000"></div>
+      <div class="form-group"><label>رقم المحفظة/الكاش</label><input id="newMemberCash" class="form-control" placeholder="فودافون كاش / إنستاباي"></div>
+    </div>
+    <input type="hidden" id="editMemberId">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('addMemberModal')">إلغاء</button><button class="btn btn-primary" onclick="submitAddMember()">حفظ العضو</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="addTransactionModal">
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title" id="txModalTitle">تسجيل معاملة مصاريف</h3><button class="modal-close" onclick="closeModal('addTransactionModal')">✖</button></div>
+    <div class="form-group"><label>عنوان المعاملة</label><input id="newTxTitle" class="form-control" placeholder="مثال: فاتورة الإنترنت"></div>
+    <div class="form-row">
+      <div class="form-group"><label>المبلغ (ج.م)</label><input type="number" id="newTxAmount" class="form-control" placeholder="0.0"></div>
+      <div class="form-group"><label>الشخص الدافع</label><select id="newTxPaidBy" class="form-control"></select></div>
+    </div>
+    <input type="hidden" id="editTxId">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('addTransactionModal')">إلغاء</button><button class="btn btn-primary" onclick="submitAddTransaction()">حفظ</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="importRoomModal">
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title">استيراد بيانات غرفة</h3><button class="modal-close" onclick="closeModal('importRoomModal')">✖</button></div>
+    <div class="form-group"><label>اختر ملف نسخة احتياطية (.json)</label><input type="file" id="importFileInput" class="form-control" accept="application/json"></div>
+    <div class="form-group"><label>أو الصق الكود المشفّر هنا</label><textarea id="importPayloadText" class="form-control" rows="4" placeholder="الصق الكود المشترك هنا..."></textarea></div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('importRoomModal')">إلغاء</button><button class="btn btn-primary" onclick="submitImportRoom()">استيراد وحفظ</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="adminGateModal">
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title" id="adminGateTitle">دخول لوحة الإدارة</h3><button class="modal-close" onclick="closeModal('adminGateModal')">✖</button></div>
+    <div id="adminGateBody"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="adminPanelModal">
+  <div class="modal wide">
+    <div class="modal-header"><h3 class="modal-title">⚙️ لوحة الإدارة</h3><button class="modal-close" onclick="closeModal('adminPanelModal')">✖</button></div>
+    <div class="form-group" style="display:flex;justify-content:space-between;align-items:center;">
+      <label style="margin:0;">الوضع الليلي</label>
+      <label class="switch"><input type="checkbox" id="adminThemeSwitch" onchange="toggleTheme()"><span class="slider"></span></label>
+    </div>
+    <div class="form-group"><label>آخر نسخة احتياطية</label><div id="lastBackupText" class="hint" style="font-size:.8rem;"></div></div>
+    <div class="modal-actions" style="justify-content:flex-start;">
+      <button class="btn btn-primary btn-sm" onclick="exportAllBackup()">⬇️ تصدير كل البيانات (ملف)</button>
+      <button class="btn btn-sm" onclick="document.getElementById('restoreFileInput').click()">⬆️ استعادة نسخة كاملة</button>
+      <input type="file" id="restoreFileInput" accept="application/json" style="display:none" onchange="restoreAllBackup(this)">
+    </div>
+    <hr style="border-color:var(--border);margin:1.2rem 0;">
+    <div class="form-group"><label>تغيير كلمة سر الإدارة</label>
+      <div class="form-row">
+        <input type="password" id="newAdminPass1" class="form-control" placeholder="كلمة سر جديدة">
+        <input type="password" id="newAdminPass2" class="form-control" placeholder="تأكيد كلمة السر">
+      </div>
+      <button class="btn btn-sm" style="margin-top:.6rem;" onclick="changeAdminPassword()">حفظ كلمة السر</button>
+    </div>
+    <hr style="border-color:var(--border);margin:1.2rem 0;">
+    <button class="btn btn-danger btn-sm" onclick="resetAllData()">🗑️ حذف كل البيانات نهائياً</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="gamiyaSettingsModal">
+  <div class="modal wide">
+    <div class="modal-header"><h3 class="modal-title">⚙️ إعدادات الجمعية</h3><button class="modal-close" onclick="closeModal('gamiyaSettingsModal')">✖</button></div>
+    <div class="form-group"><label>قسط الفرد اليومي (ج.م)</label><input type="number" id="gInstallment" class="form-control"></div>
+    <div class="form-group"><label>ترتيب الأعضاء (يبني عليه جدول اليومية والدور الشهري)</label>
+      <div class="modal-actions" style="justify-content:flex-start;margin:.4rem 0;">
+        <button class="btn btn-sm" onclick="applyOrderPreset('normal')">ترتيب عادي</button>
+        <button class="btn btn-sm" onclick="applyOrderPreset('reverse')">ترتيب عكسي</button>
+      </div>
+      <ul class="order-list" id="gOrderList"></ul>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('gamiyaSettingsModal')">إغلاق</button><button class="btn btn-primary" onclick="saveGamiyaSettings()">حفظ الإعدادات</button></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"><span id="toastMsg"></span></div>
+
+<script>
+/* ============ State & Persistence ============ */
+let appState = { rooms: [] };
+let appSettings = { theme:'dark', adminHash:null, lastBackup:null };
+let activeRoomId = null;
+let pendingAdminAction = null;
+
+function saveRooms(){ localStorage.setItem('GRM_ROOMS_V2', JSON.stringify(appState.rooms)); }
+function loadRooms(){ try{ appState.rooms = JSON.parse(localStorage.getItem('GRM_ROOMS_V2')) || []; }catch(e){ appState.rooms = []; } }
+function saveSettings(){ localStorage.setItem('GRM_SETTINGS_V2', JSON.stringify(appSettings)); }
+function loadSettings(){ try{ appSettings = Object.assign(appSettings, JSON.parse(localStorage.getItem('GRM_SETTINGS_V2'))||{}); }catch(e){} }
+
+function uid(prefix){ return prefix + '_' + Date.now() + '_' + Math.floor(Math.random()*9999); }
+function simpleHash(str){ let h=5381; for(let i=0;i<str.length;i++){ h=((h<<5)+h)+str.charCodeAt(i); h|=0; } return String(h); }
+function escapeHtml(str){ return String(str||'').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function nowStr(){ return new Date().toLocaleString('ar-EG'); }
+
+window.addEventListener('DOMContentLoaded', () => {
+  loadRooms(); loadSettings();
+  if(appState.rooms.length === 0) seedDemoData();
+  applyTheme();
+  renderRoomsDashboard();
+  checkBackupReminder();
+});
+
+function seedDemoData(){
+  const room = { id:'101', name:'جمعية العشرة الأساسية', desc:'جمعية يومية تتعكس كل 10 أيام', budget:5000, archived:false,
+    members:[
+      {id:'m1',name:'أحمد العشري',phone:'01000000001',cash:'01000000001'},
+      {id:'m2',name:'محمد علي',phone:'01000000002',cash:'01000000002'}
+    ],
+    transactions:[], logs:[{id:uid('l'),text:'تم إنشاء الغرفة وبدء تشغيل النظام.',date:nowStr()}],
+    gamiya:{ installment:100, order:['m1','m2'], schedule:[], bigRoundOrder:['m1','m2'], currentBigRound:0, bigRoundHistory:[] } };
+  appState.rooms.push(room); saveRooms();
+}
+
+/* ============ Theme ============ */
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme', appSettings.theme);
+  document.getElementById('themeBtn').innerText = appSettings.theme==='dark' ? '🌙 الوضع الليلي' : '☀️ الوضع النهاري';
+  const sw = document.getElementById('adminThemeSwitch'); if(sw) sw.checked = appSettings.theme==='light';
+}
+function toggleTheme(){ appSettings.theme = appSettings.theme==='dark'?'light':'dark'; saveSettings(); applyTheme(); }
+
+/* ============ Toast ============ */
+function showToast(msg, isError){
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').innerText = (isError?'⚠️ ':'✅ ') + msg;
+  t.classList.toggle('error', !!isError);
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove('show'), 3200);
+}
+
+/* ============ Modal helpers ============ */
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ document.querySelectorAll('.modal-overlay.open').forEach(m=>m.classList.remove('open')); } });
+
+/* ============ Backup reminder ============ */
+function checkBackupReminder(){
+  const banner = document.getElementById('backupBanner');
+  if(!appSettings.lastBackup){
+    banner.innerHTML = `<div class="banner">لسه ما عملتش نسخة احتياطية من بياناتك خالص. <button class="btn btn-sm" onclick="openAdminGate()">تصدير الآن</button></div>`;
+    return;
+  }
+  const days = (Date.now() - appSettings.lastBackup) / 86400000;
+  if(days > 7){
+    banner.innerHTML = `<div class="banner">آخر نسخة احتياطية من ${Math.floor(days)} يوم. يفضل تعمل نسخة جديدة. <button class="btn btn-sm" onclick="openAdminGate()">تصدير الآن</button></div>`;
+  } else { banner.innerHTML=''; }
+}
+
+/* ============ Dashboard ============ */
+function showDashboardView(){
+  document.getElementById('roomDetailView').classList.remove('active');
+  document.getElementById('dashboardView').classList.add('active');
+  activeRoomId = null;
+  renderRoomsDashboard();
+}
+
+function renderRoomsDashboard(){
+  const grid = document.getElementById('roomsGrid');
+  const q = (document.getElementById('dashSearch').value||'').trim().toLowerCase();
+  const showArchived = document.getElementById('showArchived').checked;
+  const sortMode = document.getElementById('sortSelect').value;
+  let rooms = appState.rooms.filter(r => showArchived ? true : !r.archived);
+  if(q) rooms = rooms.filter(r => r.name.toLowerCase().includes(q) || (r.desc||'').toLowerCase().includes(q));
+
+  if(sortMode==='name') rooms = rooms.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+  else if(sortMode==='members') rooms = rooms.slice().sort((a,b)=>b.members.length-a.members.length);
+  else if(sortMode==='pool') rooms = rooms.slice().sort((a,b)=> dailyPool(b)-dailyPool(a));
+  else rooms = rooms.slice().reverse();
+
+  grid.innerHTML = '';
+  if(rooms.length===0){ grid.innerHTML = `<p class="empty-state" style="grid-column:1/-1;">لا توجد غرف مطابقة. اضغط "غرفة جديدة" للبدء!</p>`; }
+  rooms.forEach(room=>{
+    const totalExpenses = room.transactions.reduce((s,t)=>s+parseFloat(t.amount||0),0);
+    const card = document.createElement('div');
+    card.className = 'room-card';
+    card.onclick = ()=>showRoomDetailView(room.id);
+    card.innerHTML = `
+      <div class="room-card-header">
+        <div class="room-card-title">${escapeHtml(room.name)}</div>
+        <span class="room-badge ${room.archived?'archived':''}">${room.archived?'مؤرشفة':'نشطة'}</span>
+      </div>
+      <div class="room-card-desc">${escapeHtml(room.desc||'لا يوجد وصف')}</div>
+      <div class="room-card-stats">
+        <div class="stat-item"><span class="stat-label">تحصيل يومي</span><span class="stat-value">${dailyPool(room)} ج.م</span></div>
+        <div class="stat-item"><span class="stat-label">مصاريف عامة</span><span class="stat-value">${totalExpenses.toFixed(0)} ج.م</span></div>
+        <div class="stat-item"><span class="stat-label">الأعضاء</span><span class="stat-value" style="color:var(--text);">${room.members.length}</span></div>
+      </div>`;
+    grid.appendChild(card);
+  });
+
+  const totalRooms = appState.rooms.filter(r=>!r.archived).length;
+  const totalMembers = appState.rooms.reduce((s,r)=>s+(r.archived?0:r.members.length),0);
+  const totalDaily = appState.rooms.reduce((s,r)=>s+(r.archived?0:dailyPool(r)),0);
+  document.getElementById('globalSummary').innerHTML = `
+    <div class="summary-box"><div class="lbl">إجمالي الغرف</div><div class="val">${totalRooms}</div></div>
+    <div class="summary-box"><div class="lbl">إجمالي الأعضاء</div><div class="val">${totalMembers}</div></div>
+    <div class="summary-box"><div class="lbl">إجمالي التحصيل اليومي</div><div class="val">${totalDaily} ج.م</div></div>`;
+}
+
+function dailyPool(room){ const g = room.gamiya||{installment:0}; return (g.installment||0) * room.members.length; }
+
+/* ============ Room CRUD ============ */
+function openCreateRoomModal(){
+  document.getElementById('roomModalTitle').innerText='إنشاء غرفة جديدة';
+  document.getElementById('editRoomId').value='';
+  document.getElementById('newRoomName').value='';
+  document.getElementById('newRoomDesc').value='';
+  document.getElementById('newRoomBudget').value=10000;
+  document.getElementById('newRoomInstallment').value=100;
+  openModal('createRoomModal');
+}
+function openEditRoomModal(){
+  const room = getActiveRoom(); if(!room) return;
+  document.getElementById('roomModalTitle').innerText='تعديل بيانات الغرفة';
+  document.getElementById('editRoomId').value=room.id;
+  document.getElementById('newRoomName').value=room.name;
+  document.getElementById('newRoomDesc').value=room.desc||'';
+  document.getElementById('newRoomBudget').value=room.budget||10000;
+  document.getElementById('newRoomInstallment').value=(room.gamiya&&room.gamiya.installment)||100;
+  openModal('createRoomModal');
+}
+function submitCreateRoom(){
+  const name = document.getElementById('newRoomName').value.trim();
+  const desc = document.getElementById('newRoomDesc').value.trim();
+  const budget = parseFloat(document.getElementById('newRoomBudget').value)||10000;
+  const installment = parseFloat(document.getElementById('newRoomInstallment').value)||100;
+  const editId = document.getElementById('editRoomId').value;
+  if(!name) return showToast('يرجى كتابة اسم الغرفة!', true);
+
+  if(editId){
+    const room = appState.rooms.find(r=>r.id===editId);
+    room.name=name; room.desc=desc; room.budget=budget; room.gamiya.installment=installment;
+    room.logs.unshift({id:uid('l'),text:'تم تعديل بيانات الغرفة',date:nowStr()});
+    showToast('تم تحديث الغرفة!');
+  } else {
+    const newRoom = { id:uid('r'), name, desc, budget, archived:false, members:[], transactions:[],
+      logs:[{id:uid('l'),text:'تم إنشاء الغرفة',date:nowStr()}],
+      gamiya:{ installment, order:[], schedule:[], bigRoundOrder:[], currentBigRound:0, bigRoundHistory:[] } };
+    appState.rooms.push(newRoom);
+    showToast('تم إنشاء الغرفة بنجاح!');
+  }
+  saveRooms(); closeModal('createRoomModal');
+  if(editId){ renderRoomDetails(); } else { renderRoomsDashboard(); }
+}
+function archiveCurrentRoom(){
+  const room = getActiveRoom(); if(!room) return;
+  room.archived = !room.archived;
+  room.logs.unshift({id:uid('l'),text: room.archived?'تم أرشفة الغرفة':'تم إلغاء أرشفة الغرفة', date:nowStr()});
+  saveRooms(); showToast(room.archived?'تم أرشفة الغرفة':'تم إلغاء الأرشفة'); showDashboardView();
+}
+function deleteCurrentRoom(){
+  const room = getActiveRoom(); if(!room) return;
+  if(confirm('هل أنت متأكد من حذف هذه الغرفة نهائياً؟ لا يمكن التراجع.')){
+    appState.rooms = appState.rooms.filter(r=>r.id!==activeRoomId);
+    saveRooms(); showToast('تم حذف الغرفة!'); showDashboardView();
+  }
+}
+function getActiveRoom(){ return appState.rooms.find(r=>r.id===activeRoomId); }
+
+/* ============ Room detail / tabs ============ */
+function showRoomDetailView(roomId){
+  activeRoomId = roomId;
+  document.getElementById('dashboardView').classList.remove('active');
+  document.getElementById('roomDetailView').classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelector('.tab-btn[data-tab="membersTab"]').classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(t=>t.style.display='none');
+  document.getElementById('membersTab').style.display='block';
+  renderRoomDetails();
+}
+function switchTab(tabId, btn){
+  document.querySelectorAll('.tab-content').forEach(el=>el.style.display='none');
+  document.querySelectorAll('.tab-btn').forEach(el=>el.classList.remove('active'));
+  document.getElementById(tabId).style.display='block';
+  btn.classList.add('active');
+}
+
+function renderRoomDetails(){
+  const room = getActiveRoom(); if(!room) return;
+  document.getElementById('currentRoomTitle').innerText = room.name;
+  document.getElementById('currentRoomDesc').innerText = room.desc || 'لا يوجد وصف';
+
+  renderMembers(room);
+  renderGamiya(room);
+  renderTransactions(room);
+  renderAnalytics(room);
+  renderLogs(room);
+}
+
+function renderMembers(room){
+  const q = (document.getElementById('memberSearch').value||'').trim().toLowerCase();
+  const list = document.getElementById('membersList');
+  const members = room.members.filter(m=>m.name.toLowerCase().includes(q));
+  list.innerHTML = '';
+  if(room.members.length===0){ list.innerHTML = `<p class="empty-state">لا يوجد أعضاء. أضف حتى 10 أعضاء للجمعية.</p>`; return; }
+  if(members.length===0){ list.innerHTML = `<p class="empty-state">لا توجد نتائج مطابقة.</p>`; return; }
+  const totalSpent = room.transactions.reduce((s,t)=>s+parseFloat(t.amount||0),0);
+  const share = room.members.length ? totalSpent/room.members.length : 0;
+  members.forEach(m=>{
+    const paidByThis = room.transactions.filter(t=>t.paidBy===m.id).reduce((s,t)=>s+parseFloat(t.amount||0),0);
+    const balance = paidByThis - share; const positive = balance>=0;
+    const el = document.createElement('div'); el.className='member-card';
+    el.innerHTML = `
+      <div class="member-info">
+        <div class="avatar">${escapeHtml(m.name.charAt(0))}</div>
+        <div class="member-details">
+          <h4>${escapeHtml(m.name)}</h4>
+          <p>📞 ${escapeHtml(m.phone||'غير مسجل')}</p>
+          <p>💳 ${escapeHtml(m.cash||'غير مسجل')}</p>
+        </div>
+      </div>
+      <div style="text-align:left;">
+        <div class="balance-amount ${positive?'positive':'negative'}">${positive?'+':''}${balance.toFixed(0)} ج.م (${positive?'له':'عليه'})</div>
+        <div class="member-actions" style="margin-top:6px;">
+          <button class="btn btn-wa btn-sm" onclick="sendWhatsapp('${m.phone}','${escapeHtml(m.name)}','تذكير عام')">تذكير واتساب</button>
+          <button class="btn btn-sm" onclick="openAddMemberModal('${m.id}')">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteMember('${m.id}')">🗑️</button>
+        </div>
+      </div>`;
+    list.appendChild(el);
+  });
+}
+function openAddMemberModal(editId){
+  const room = getActiveRoom();
+  document.getElementById('memberModalTitle').innerText = editId?'تعديل بيانات العضو':'إضافة عضو جديد';
+  document.getElementById('editMemberId').value = editId||'';
+  if(editId){
+    const m = room.members.find(x=>x.id===editId);
+    document.getElementById('newMemberName').value = m.name;
+    document.getElementById('newMemberPhone').value = m.phone||'';
+    document.getElementById('newMemberCash').value = m.cash||'';
+  } else {
+    document.getElementById('newMemberName').value='';
+    document.getElementById('newMemberPhone').value='';
+    document.getElementById('newMemberCash').value='';
+  }
+  openModal('addMemberModal');
+}
+function submitAddMember(){
+  const room = getActiveRoom(); if(!room) return;
+  const name = document.getElementById('newMemberName').value.trim();
+  const phone = document.getElementById('newMemberPhone').value.trim();
+  const cash = document.getElementById('newMemberCash').value.trim();
+  const editId = document.getElementById('editMemberId').value;
+  if(!name) return showToast('يرجى إدخال اسم العضو!', true);
+  if(editId){
+    const m = room.members.find(x=>x.id===editId);
+    m.name=name; m.phone=phone; m.cash=cash;
+    room.logs.unshift({id:uid('l'),text:`تم تعديل بيانات العضو [${name}]`,date:nowStr()});
+    showToast('تم تحديث بيانات العضو');
+  } else {
+    if(room.members.length>=10) return showToast('الحد الأقصى 10 أعضاء لكل غرفة جمعية!', true);
+    const id = uid('m');
+    room.members.push({id,name,phone,cash});
+    room.gamiya.order.push(id); room.gamiya.bigRoundOrder.push(id);
+    room.logs.unshift({id:uid('l'),text:`تم إضافة العضو [${name}]`,date:nowStr()});
+    showToast('تم إضافة العضو بنجاح!');
+  }
+  saveRooms(); closeModal('addMemberModal'); renderRoomDetails();
+}
+function deleteMember(memberId){
+  const room = getActiveRoom(); if(!room) return;
+  if(!confirm('حذف هذا العضو؟ سيتم إزالته من ترتيب الجمعية أيضاً.')) return;
+  room.members = room.members.filter(m=>m.id!==memberId);
+  room.gamiya.order = room.gamiya.order.filter(id=>id!==memberId);
+  room.gamiya.bigRoundOrder = room.gamiya.bigRoundOrder.filter(id=>id!==memberId);
+  room.logs.unshift({id:uid('l'),text:'تم حذف عضو من الغرفة',date:nowStr()});
+  saveRooms(); showToast('تم حذف العضو'); renderRoomDetails();
+}
+
+/* ============ Gam3eya engine ============ */
+function memberName(room, id){ const m = room.members.find(x=>x.id===id); return m?m.name:'غير معروف'; }
+
+function renderGamiya(room){
+  const g = room.gamiya;
+  document.getElementById('gamiyaSummary').innerHTML = `
+    قسط الفرد اليومي: <b style="color:var(--text)">${g.installment} ج.م</b> &nbsp;|&nbsp;
+    عدد الأعضاء: <b style="color:var(--text)">${room.members.length}</b> &nbsp;|&nbsp;
+    التحصيل اليومي الكامل: <b style="color:var(--primary)">${dailyPool(room)} ج.م</b> &nbsp;|&nbsp;
+    نصيب الفرد شهرياً تقريباً: <b style="color:var(--text)">${g.installment*30} ج.م</b>`;
+
+  // schedule table
+  const table = document.getElementById('scheduleTable');
+  if(!g.schedule || g.schedule.length===0){
+    table.innerHTML = `<tr><td class="empty-state">لا يوجد جدول بعد. اضغط "توليد جدول شهري جديد".</td></tr>`;
+  } else {
+    let firstPending = g.schedule.findIndex(d=>!d.received);
+    let rows = `<tr><th>اليوم</th><th>يستلم</th><th>حالة الاستلام</th><th>الدفعات</th><th></th></tr>`;
+    g.schedule.forEach((d,i)=>{
+      const paidCount = Object.values(d.payments||{}).filter(Boolean).length;
+      rows += `<tr class="day-row ${d.received?'received':''} ${i===firstPending?'current-day':''}">
+        <td>${d.day}</td>
+        <td>${escapeHtml(memberName(room,d.memberId))}</td>
+        <td>${d.received? '✅ تم' : '⏳ لم يتم بعد'}</td>
+        <td>${paidCount}/${room.members.length} <span class="chip ${paidCount>=room.members.length?'paid':'unpaid'}">${paidCount>=room.members.length?'مكتمل':'ناقص'}</span></td>
+        <td>
+          <button class="btn btn-sm" onclick="togglePaymentsPanel(${i})">تفاصيل</button>
+          <button class="btn btn-sm ${d.received?'':'btn-primary'}" onclick="toggleDayReceived(${i})">${d.received?'تراجع':'تسجيل استلام'}</button>
+        </td>
+      </tr>
+      <tr id="payPanel_${i}" style="display:none;"><td colspan="5">
+        <div class="payments-grid">${room.members.map(m=>`
+          <label><input type="checkbox" ${d.payments&&d.payments[m.id]?'checked':''} onchange="togglePayment(${i},'${m.id}',this.checked)"> ${escapeHtml(m.name)}</label>`).join('')}
+        </div>
+      </td></tr>`;
+    });
+    table.innerHTML = rows;
+  }
+
+  // members gamiya summary
+  const list = document.getElementById('gamiyaMembersSummary');
+  list.innerHTML='';
+  if(room.members.length===0){ list.innerHTML = `<p class="empty-state">لا يوجد أعضاء بعد.</p>`; }
+  room.members.forEach(m=>{
+    const paidDays = (g.schedule||[]).filter(d=>d.payments && d.payments[m.id]).length;
+    const totalPaid = paidDays * g.installment;
+    const receivedTotal = (g.schedule||[]).filter(d=>d.memberId===m.id && d.received).length * dailyPool(room);
+    const el = document.createElement('div'); el.className='member-card';
+    el.innerHTML = `<div class="member-info"><div class="avatar">${escapeHtml(m.name.charAt(0))}</div>
+      <div class="member-details"><h4>${escapeHtml(m.name)}</h4>
+      <p>سدد ${paidDays} يوم = ${totalPaid} ج.م</p></div></div>
+      <div style="text-align:left;"><div class="balance-amount positive">استلم: ${receivedTotal} ج.م</div></div>`;
+    list.appendChild(el);
+  });
+
+  // big round
+  const brList = document.getElementById('bigRoundList');
+  brList.innerHTML='';
+  (g.bigRoundOrder||[]).forEach((mid,idx)=>{
+    const isCurrent = idx===g.currentBigRound;
+    brList.innerHTML += `<li class="order-item" style="${isCurrent?'border-color:var(--primary);':''}">
+      <span><span class="idx">${idx+1}.</span>${escapeHtml(memberName(room,mid))} ${isCurrent?'<span class="chip turn">الدور عليه الشهر ده</span>':''}</span>
+    </li>`;
+  });
+  const hist = document.getElementById('bigRoundHistory');
+  hist.innerHTML = (g.bigRoundHistory||[]).length===0 ? `<p class="empty-state">لا يوجد سجل بعد.</p>` :
+    g.bigRoundHistory.slice().reverse().map(h=>`<div class="log-card"><span>استلم ${escapeHtml(memberName(room,h.recipientId))} مبلغ ${h.amount} ج.م</span><span style="color:var(--muted);font-size:.75rem;">${h.date}</span></div>`).join('');
+}
+
+function generateSchedule(){
+  const room = getActiveRoom(); if(!room) return;
+  if(room.members.length<2) return showToast('أضف عضوين على الأقل لتوليد الجدول', true);
+  const g = room.gamiya;
+  if(!g.order || g.order.length !== room.members.length) g.order = room.members.map(m=>m.id);
+  const normal = g.order.slice();
+  const reverse = g.order.slice().reverse();
+  const sequence = normal.concat(reverse).concat(normal);
+  g.schedule = sequence.map((mid,i)=>({ day:i+1, memberId:mid, received:false, payments:{} }));
+  saveRooms(); renderGamiya(room); showToast('تم توليد جدول جديد (' + sequence.length + ' يوم)');
+}
+function togglePaymentsPanel(i){
+  const row = document.getElementById('payPanel_'+i);
+  row.style.display = row.style.display==='none' ? 'table-row' : 'none';
+}
+function togglePayment(i, memberId, checked){
+  const room = getActiveRoom(); const d = room.gamiya.schedule[i];
+  d.payments = d.payments||{}; d.payments[memberId] = checked;
+  saveRooms(); renderGamiya(room);
+}
+function toggleDayReceived(i){
+  const room = getActiveRoom(); const d = room.gamiya.schedule[i];
+  d.received = !d.received;
+  if(d.received) room.logs.unshift({id:uid('l'),text:`استلم ${memberName(room,d.memberId)} تحصيل يوم ${d.day} (${dailyPool(room)} ج.م)`,date:nowStr()});
+  saveRooms(); renderGamiya(room);
+}
+function remindUnpaidToday(){
+  const room = getActiveRoom(); if(!room) return;
+  const firstPending = (room.gamiya.schedule||[]).find(d=>!d.received);
+  if(!firstPending) return showToast('لا يوجد يوم معلّق حالياً', true);
+  const unpaid = room.members.filter(m => !(firstPending.payments && firstPending.payments[m.id]));
+  if(unpaid.length===0) return showToast('كل الأعضاء دفعوا اليوم!');
+  unpaid.forEach(m => sendWhatsapp(m.phone, m.name, `تذكير: من فضلك ادفع قسط اليوم (${room.gamiya.installment} ج.م) في جمعية ${room.name}`));
+  showToast(`تم فتح تذكير لـ ${unpaid.length} عضو`);
+}
+
+function openGamiyaSettingsModal(){
+  const room = getActiveRoom(); if(!room) return;
+  document.getElementById('gInstallment').value = room.gamiya.installment;
+  renderOrderList(room);
+  openModal('gamiyaSettingsModal');
+}
+function renderOrderList(room){
+  const list = document.getElementById('gOrderList');
+  const order = room.gamiya.order.length===room.members.length ? room.gamiya.order : room.members.map(m=>m.id);
+  list.innerHTML = order.map((mid,idx)=>`
+    <li class="order-item"><span><span class="idx">${idx+1}.</span>${escapeHtml(memberName(room,mid))}</span>
+      <span class="ctrl">
+        <button class="btn btn-sm" onclick="moveOrderItem(${idx},-1)">⬆️</button>
+        <button class="btn btn-sm" onclick="moveOrderItem(${idx},1)">⬇️</button>
+      </span></li>`).join('');
+  room.gamiya._tempOrder = order.slice();
+}
+function moveOrderItem(idx, dir){
+  const room = getActiveRoom();
+  const arr = room.gamiya._tempOrder;
+  const newIdx = idx+dir;
+  if(newIdx<0 || newIdx>=arr.length) return;
+  [arr[idx],arr[newIdx]] = [arr[newIdx],arr[idx]];
+  room.gamiya.order = arr;
+  renderOrderList(room);
+}
+function applyOrderPreset(type){
+  const room = getActiveRoom();
+  let arr = room.members.map(m=>m.id);
+  if(type==='reverse') arr = arr.reverse();
+  room.gamiya.order = arr;
+  renderOrderList(room);
+}
+function saveGamiyaSettings(){
+  const room = getActiveRoom(); if(!room) return;
+  room.gamiya.installment = parseFloat(document.getElementById('gInstallment').value)||100;
+  room.gamiya.order = room.gamiya._tempOrder || room.gamiya.order;
+  if(room.gamiya.bigRoundOrder.length !== room.members.length) room.gamiya.bigRoundOrder = room.members.map(m=>m.id);
+  saveRooms(); closeModal('gamiyaSettingsModal'); renderGamiya(room); showToast('تم حفظ إعدادات الجمعية');
+}
+function collectBigRound(){
+  const room = getActiveRoom(); if(!room) return;
+  const g = room.gamiya;
+  if(!g.bigRoundOrder || g.bigRoundOrder.length===0) return showToast('حدد ترتيب الدور الشهري أولاً من الإعدادات', true);
+  const recipientId = g.bigRoundOrder[g.currentBigRound % g.bigRoundOrder.length];
+  const amount = g.installment * 30 * room.members.length;
+  g.bigRoundHistory.push({recipientId, amount, date:nowStr()});
+  room.logs.unshift({id:uid('l'),text:`تم تسليم الدور الشهري الكبير (${amount} ج.م) لـ ${memberName(room,recipientId)}`,date:nowStr()});
+  g.currentBigRound = (g.currentBigRound + 1) % g.bigRoundOrder.length;
+  saveRooms(); renderGamiya(room); showToast('تم تسجيل استلام الدور والانتقال للشهر التالي');
+}
+
+/* ============ Transactions ============ */
+function renderTransactions(room){
+  const q = (document.getElementById('txSearch').value||'').trim().toLowerCase();
+  const list = document.getElementById('transactionsList');
+  const txs = room.transactions.filter(t=>t.title.toLowerCase().includes(q));
+  list.innerHTML='';
+  if(room.transactions.length===0){ list.innerHTML = `<p class="empty-state">لا توجد معاملات مسجلة.</p>`; return; }
+  if(txs.length===0){ list.innerHTML = `<p class="empty-state">لا توجد نتائج مطابقة.</p>`; return; }
+  txs.slice().reverse().forEach(tx=>{
+    const payer = room.members.find(m=>m.id===tx.paidBy);
+    const el = document.createElement('div'); el.className='tx-card';
+    el.innerHTML = `<div><h4 style="font-size:.9rem;">${escapeHtml(tx.title)}</h4>
+      <p style="font-size:.75rem;color:var(--muted);">دافع: ${payer?escapeHtml(payer.name):'غير معروف'} — ${tx.date}</p></div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="font-weight:800;color:var(--primary);">${parseFloat(tx.amount).toFixed(0)} ج.م</div>
+        <button class="btn btn-sm" onclick="openAddTransactionModal('${tx.id}')">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteTransaction('${tx.id}')">🗑️</button>
+      </div>`;
+    list.appendChild(el);
+  });
+}
+function openAddTransactionModal(editId){
+  const room = getActiveRoom();
+  if(!room || room.members.length===0) return showToast('يجب إضافة أعضاء أولاً!', true);
+  const select = document.getElementById('newTxPaidBy');
+  select.innerHTML = room.members.map(m=>`<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+  document.getElementById('txModalTitle').innerText = editId?'تعديل معاملة':'تسجيل معاملة مصاريف';
+  document.getElementById('editTxId').value = editId||'';
+  if(editId){
+    const tx = room.transactions.find(t=>t.id===editId);
+    document.getElementById('newTxTitle').value = tx.title;
+    document.getElementById('newTxAmount').value = tx.amount;
+    select.value = tx.paidBy;
+  } else {
+    document.getElementById('newTxTitle').value=''; document.getElementById('newTxAmount').value='';
+  }
+  openModal('addTransactionModal');
+}
+function submitAddTransaction(){
+  const room = getActiveRoom(); if(!room) return;
+  const title = document.getElementById('newTxTitle').value.trim();
+  const amount = parseFloat(document.getElementById('newTxAmount').value);
+  const paidBy = document.getElementById('newTxPaidBy').value;
+  const editId = document.getElementById('editTxId').value;
+  if(!title || isNaN(amount) || amount<=0) return showToast('يرجى ملء البيانات بشكل صحيح!', true);
+  if(editId){
+    const tx = room.transactions.find(t=>t.id===editId);
+    tx.title=title; tx.amount=amount; tx.paidBy=paidBy;
+    room.logs.unshift({id:uid('l'),text:`تم تعديل معاملة (${title})`,date:nowStr()});
+  } else {
+    room.transactions.push({id:uid('t'),title,amount,paidBy,date:new Date().toLocaleDateString('ar-EG')});
+    room.logs.unshift({id:uid('l'),text:`تسجيل معاملة بقيمة (${amount} ج.م)`,date:nowStr()});
+  }
+  saveRooms(); closeModal('addTransactionModal'); renderRoomDetails(); showToast('تم الحفظ بنجاح!');
+}
+function deleteTransaction(txId){
+  const room = getActiveRoom(); if(!room) return;
+  if(!confirm('حذف هذه المعاملة؟')) return;
+  room.transactions = room.transactions.filter(t=>t.id!==txId);
+  saveRooms(); renderRoomDetails(); showToast('تم الحذف');
+}
+function exportTransactionsCSV(){
+  const room = getActiveRoom(); if(!room) return;
+  let csv = 'العنوان,المبلغ,الدافع,التاريخ\n';
+  room.transactions.forEach(t=>{
+    const payer = room.members.find(m=>m.id===t.paidBy);
+    csv += `"${t.title}",${t.amount},"${payer?payer.name:''}","${t.date}"\n`;
+  });
+  downloadFile(room.name+'-transactions.csv', csv, 'text/csv;charset=utf-8;');
+}
+
+/* ============ Analytics ============ */
+function renderAnalytics(room){
+  const totalSpent = room.transactions.reduce((s,t)=>s+parseFloat(t.amount||0),0);
+  const pct = Math.min((totalSpent/(room.budget||10000))*100, 100);
+  document.getElementById('budgetProgressBar').style.width = pct+'%';
+  document.getElementById('analyticsSpentText').innerText = `المصروف: ${totalSpent.toFixed(0)} ج.م`;
+  document.getElementById('analyticsLimitText').innerText = `السقف: ${room.budget||10000} ج.م`;
+  document.getElementById('budgetHealthStatus').innerText = pct<70?'ممتاز':pct<100?'تنبيه':'تجاوز السقف';
+
+  const g = room.gamiya;
+  const max = Math.max(1, ...room.members.map(m => (g.schedule||[]).filter(d=>d.payments&&d.payments[m.id]).length * g.installment));
+  document.getElementById('barChart').innerHTML = room.members.map(m=>{
+    const paid = (g.schedule||[]).filter(d=>d.payments&&d.payments[m.id]).length * g.installment;
+    const w = Math.round((paid/max)*100);
+    return `<div style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:3px;"><span>${escapeHtml(m.name)}</span><span>${paid} ج.م</span></div>
+    <div class="progress-bar-container"><div class="progress-bar" style="width:${w}%;"></div></div></div>`;
+  }).join('') || `<p class="empty-state">لا يوجد بيانات بعد.</p>`;
+}
+
+/* ============ Logs ============ */
+function renderLogs(room){
+  const list = document.getElementById('logsList');
+  list.innerHTML = room.logs.length===0 ? `<p class="empty-state">لا يوجد سجل بعد.</p>` :
+    room.logs.map(l=>`<div class="log-card"><span>✅ ${escapeHtml(l.text)}</span><span style="font-size:.72rem;color:var(--muted);">${l.date}</span></div>`).join('');
+}
+
+/* ============ WhatsApp ============ */
+function sendWhatsapp(phone, name, note){
+  if(!phone) return showToast('العضو لا يمتلك رقم واتساب مسجل!', true);
+  let p = phone.replace(/\D/g,'');
+  if(!p.startsWith('20') && p.length===11) p = '20'+p.substring(1);
+  const msg = `السلام عليكم يا ${name} 👋\n\n${note}\n\nدمت بخير 🌿`;
+  window.open(`https://wa.me/${p}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+/* ============ Export / Import (per room) ============ */
+function exportCurrentRoom(){
+  const room = getActiveRoom(); if(!room) return;
+  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(room))));
+  downloadFile(room.name+'-backup.json', JSON.stringify(room,null,2), 'application/json');
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(encoded).then(()=>showToast('تم تنزيل ملف الغرفة ونسخ الكود المشفر للحافظة!'))
+      .catch(()=>showToast('تم تنزيل ملف الغرفة! (تعذر النسخ للحافظة)'));
+  } else { showToast('تم تنزيل ملف الغرفة!'); }
+}
+function openImportModal(){ document.getElementById('importPayloadText').value=''; document.getElementById('importFileInput').value=''; openModal('importRoomModal'); }
+function submitImportRoom(){
+  const fileInput = document.getElementById('importFileInput');
+  if(fileInput.files && fileInput.files[0]){
+    const reader = new FileReader();
+    reader.onload = e => { try{ importRoomObject(JSON.parse(e.target.result)); } catch(err){ showToast('ملف غير صالح!', true); } };
+    reader.readAsText(fileInput.files[0]);
+    return;
+  }
+  const code = document.getElementById('importPayloadText').value.trim();
+  if(!code) return showToast('اختر ملف أو الصق الكود أولاً!', true);
+  try{
+    const decoded = decodeURIComponent(escape(atob(code)));
+    importRoomObject(JSON.parse(decoded));
+  } catch(e){ showToast('الكود غير صالح أو تالف!', true); }
+}
+function importRoomObject(room){
+  if(!room || !room.id || !room.name) return showToast('بيانات الغرفة غير مكتملة!', true);
+  if(!room.gamiya) room.gamiya = {installment:100, order:[], schedule:[], bigRoundOrder:[], currentBigRound:0, bigRoundHistory:[]};
+  appState.rooms = appState.rooms.filter(r=>r.id!==room.id);
+  appState.rooms.push(room);
+  saveRooms(); closeModal('importRoomModal'); renderRoomsDashboard(); showToast('تم استيراد الغرفة بنجاح!');
+}
+
+/* ============ Full backup / restore ============ */
+function downloadFile(filename, content, type){
+  const blob = new Blob([content], {type});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function exportAllBackup(){
+  downloadFile('gam3eya-full-backup.json', JSON.stringify(appState.rooms,null,2), 'application/json');
+  appSettings.lastBackup = Date.now(); saveSettings();
+  document.getElementById('lastBackupText').innerText = 'الآن';
+  checkBackupReminder();
+  showToast('تم تنزيل نسخة احتياطية كاملة!');
+}
+function restoreAllBackup(input){
+  if(!input.files || !input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try{
+      const data = JSON.parse(e.target.result);
+      if(!Array.isArray(data)) throw new Error();
+      if(confirm('هل تريد استبدال كل البيانات الحالية بهذه النسخة؟')){
+        appState.rooms = data; saveRooms(); renderRoomsDashboard(); showToast('تم استعادة النسخة الاحتياطية!');
+      }
+    } catch(err){ showToast('ملف النسخة الاحتياطية غير صالح!', true); }
+  };
+  reader.readAsText(input.files[0]);
+}
+function resetAllData(){
+  if(!confirm('سيتم حذف كل الغرف والبيانات نهائياً. متأكد؟')) return;
+  if(!confirm('تأكيد أخير: لا يمكن التراجع عن هذه الخطوة!')) return;
+  appState.rooms = []; saveRooms(); closeModal('adminPanelModal'); showDashboardView(); showToast('تم حذف كل البيانات');
+}
+
+/* ============ Admin gate ============ */
+function openAdminGate(){
+  const body = document.getElementById('adminGateBody');
+  if(!appSettings.adminHash){
+    document.getElementById('adminGateTitle').innerText = 'تعيين كلمة سر الإدارة (أول مرة)';
+    body.innerHTML = `
+      <div class="form-group"><label>كلمة السر الجديدة</label><input type="password" id="setPass1" class="form-control"></div>
+      <div class="form-group"><label>تأكيد كلمة السر</label><input type="password" id="setPass2" class="form-control"></div>
+      <div class="modal-actions"><button class="btn" onclick="closeModal('adminGateModal')">إلغاء</button>
+      <button class="btn btn-primary" onclick="firstSetAdminPassword()">حفظ ودخول</button></div>`;
+  } else {
+    document.getElementById('adminGateTitle').innerText = 'أدخل كلمة سر الإدارة';
+    body.innerHTML = `
+      <div class="form-group"><label>كلمة السر</label><input type="password" id="checkPass" class="form-control" onkeydown="if(event.key==='Enter')verifyAdminPassword()"></div>
+      <div class="modal-actions"><button class="btn" onclick="closeModal('adminGateModal')">إلغاء</button>
+      <button class="btn btn-primary" onclick="verifyAdminPassword()">دخول</button></div>`;
+  }
+  openModal('adminGateModal');
+}
+function firstSetAdminPassword(){
+  const p1 = document.getElementById('setPass1').value, p2 = document.getElementById('setPass2').value;
+  if(!p1 || p1.length<4) return showToast('كلمة السر يجب ألا تقل عن 4 خانات', true);
+  if(p1!==p2) return showToast('كلمتا السر غير متطابقتين!', true);
+  appSettings.adminHash = simpleHash(p1); saveSettings();
+  closeModal('adminGateModal'); openAdminPanel();
+}
+function verifyAdminPassword(){
+  const p = document.getElementById('checkPass').value;
+  if(simpleHash(p) === appSettings.adminHash){ closeModal('adminGateModal'); openAdminPanel(); }
+  else showToast('كلمة السر غير صحيحة!', true);
+}
+function openAdminPanel(){
+  document.getElementById('lastBackupText').innerText = appSettings.lastBackup ? new Date(appSettings.lastBackup).toLocaleString('ar-EG') : 'لم يتم عمل نسخة بعد';
+  applyTheme();
+  openModal('adminPanelModal');
+}
+function changeAdminPassword(){
+  const p1 = document.getElementById('newAdminPass1').value, p2 = document.getElementById('newAdminPass2').value;
+  if(!p1 || p1.length<4) return showToast('كلمة السر يجب ألا تقل عن 4 خانات', true);
+  if(p1!==p2) return showToast('كلمتا السر غير متطابقتين!', true);
+  appSettings.adminHash = simpleHash(p1); saveSettings();
+  document.getElementById('newAdminPass1').value=''; document.getElementById('newAdminPass2').value='';
+  showToast('تم تغيير كلمة السر بنجاح');
+}
+
+/* ============ Print ============ */
+function printRoom(){ window.print(); }
+</script>
+</body>
+</html>
