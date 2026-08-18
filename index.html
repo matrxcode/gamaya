@@ -3,7 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام إدارة الجمعيات الذكي - سطح المكتب</title>
+    <meta name="theme-color" content="#1e3c72">
+    <meta name="description" content="نظام متكامل لإدارة الجمعيات المالية وتتبع المدفوعات أوفلاين">
+    <title>نظام إدارة الجمعيات الذكي - الإصدار الاحترافي</title>
+
+    <!-- ربط ملف الـ Manifest والـ Service Worker للتثبيت كـ PWA -->
+    <link rel="manifest" href="manifest.json">
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('sw.js')
+            .then(reg => console.log('Service Worker Registered Successfully', reg.scope))
+            .catch(err => console.error('Service Worker Registration Failed', err));
+        });
+      }
+    </script>
+
     <style>
         :root {
             --primary-color: #1e3c72;
@@ -11,6 +26,7 @@
             --accent-color: #00c853;
             --danger-color: #d50000;
             --warning-color: #ffab00;
+            --info-color: #0288d1;
             --bg-light: #f4f7f6;
             --card-bg: #ffffff;
             --text-dark: #2c3e50;
@@ -54,7 +70,7 @@
             border-radius: 16px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
             width: 100%;
-            max-width: 400px;
+            max-width: 420px;
             text-align: center;
         }
 
@@ -76,7 +92,7 @@
             color: var(--text-muted);
         }
 
-        .input-group input {
+        .input-group input, .input-group select {
             width: 100%;
             padding: 12px 15px;
             border: 2px solid var(--border-color);
@@ -86,7 +102,7 @@
             transition: 0.3s;
         }
 
-        .input-group input:focus {
+        .input-group input:focus, .input-group select:focus {
             border-color: var(--secondary-color);
         }
 
@@ -125,8 +141,9 @@
 
         .header-controls {
             display: flex;
-            gap: 15px;
+            gap: 12px;
             align-items: center;
+            flex-wrap: wrap;
         }
 
         .btn-logout {
@@ -152,6 +169,21 @@
             width: 100%;
         }
 
+        /* شريط التنبيهات أوفلاين/أونلاين */
+        .status-banner {
+            padding: 10px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+            display: none;
+        }
+        .status-banner.offline {
+            background-color: var(--warning-color);
+            color: black;
+            display: block;
+        }
+
         /* نظام الغرف */
         .rooms-bar {
             display: flex;
@@ -173,6 +205,7 @@
             align-items: center;
             gap: 8px;
             color: var(--text-dark);
+            white-space: nowrap;
         }
 
         .room-tab.active {
@@ -190,16 +223,17 @@
             cursor: pointer;
             font-weight: bold;
             transition: 0.3s;
+            white-space: nowrap;
         }
 
         .btn-add-room:hover {
             opacity: 0.9;
         }
 
-        /* بطاقات المخصصة والإحصائيات */
+        /* بطاقات الإحصائيات */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
@@ -215,6 +249,7 @@
         .stat-card.green { border-color: var(--accent-color); }
         .stat-card.red { border-color: var(--danger-color); }
         .stat-card.amber { border-color: var(--warning-color); }
+        .stat-card.blue { border-color: var(--info-color); }
 
         .stat-card h3 {
             font-size: 14px;
@@ -227,7 +262,7 @@
             font-weight: bold;
         }
 
-        /* لوحة التحكم والإعدادات للغرفة */
+        /* أدوات الإدارة والإعدادات */
         .room-actions {
             background: var(--card-bg);
             padding: 20px;
@@ -258,7 +293,7 @@
         }
 
         .btn {
-            padding: 10px 20px;
+            padding: 10px 18px;
             border: none;
             border-radius: 8px;
             font-weight: bold;
@@ -268,14 +303,31 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
+            font-size: 14px;
         }
 
         .btn-primary { background: var(--secondary-color); color: white; }
         .btn-success { background: var(--accent-color); color: white; }
         .btn-danger { background: var(--danger-color); color: white; }
         .btn-warning { background: var(--warning-color); color: black; }
+        .btn-info { background: var(--info-color); color: white; }
 
         .btn:hover { opacity: 0.9; }
+
+        /* تصفية وحسابات */
+        .filter-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+
+        .filter-box input {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            width: 250px;
+        }
 
         /* الجدول الرئيسي */
         .table-container {
@@ -297,12 +349,14 @@
             font-weight: bold;
             color: var(--text-muted);
             border-bottom: 2px solid var(--border-color);
+            white-space: nowrap;
         }
 
         td {
             padding: 16px;
             border-bottom: 1px solid var(--border-color);
             vertical-align: middle;
+            white-space: nowrap;
         }
 
         tr:hover {
@@ -326,7 +380,7 @@
             justify-content: flex-start;
         }
 
-        /* نافذة العرض العائمة (Modal) */
+        /* النوافذ العائمة (Modals) */
         .modal {
             position: fixed;
             top: 0;
@@ -360,17 +414,13 @@
             margin-bottom: 20px;
         }
 
-        .modal-header h3 {
-            color: var(--primary-color);
-        }
-
         .close-modal {
-            font-size: 20px;
+            font-size: 22px;
             cursor: pointer;
             color: var(--text-muted);
         }
 
-        /* سجل التغييرات */
+        /* السجل المالي والأحداث */
         .logs-section {
             margin-top: 30px;
             background: var(--card-bg);
@@ -386,7 +436,7 @@
 
         .log-list {
             list-style: none;
-            max-height: 150px;
+            max-height: 180px;
             overflow-y: auto;
             font-size: 13px;
         }
@@ -398,7 +448,7 @@
         }
 
         @media print {
-            .app-header, .rooms-bar, .room-actions, .action-cell, .btn, .logs-section, #loginScreen {
+            .app-header, .rooms-bar, .room-actions, .action-cell, .btn, .logs-section, #loginScreen, .filter-box {
                 display: none !important;
             }
             .main-container { padding: 0; }
@@ -407,6 +457,9 @@
     </style>
 </head>
 <body>
+
+    <!-- شريط حالة الأوفلاين -->
+    <div id="offlineBanner" class="status-banner">أنت تعمل حالياً في الوضع الأوفلاين - يتم حفظ جميع التغييرات محلياً تلقائياً</div>
 
     <!-- شاشة تسجيل الدخول -->
     <div id="loginScreen">
@@ -424,39 +477,38 @@
         </div>
     </div>
 
-    <!-- الهيكل الداخلي للتطبيق -->
+    <!-- التطبيق الرئيسي -->
     <div id="appBody" style="display:none;">
         <header class="app-header">
             <div class="header-title">
-                <h1>إدارة الجمعيات الاحترافية (أوفلاين)</h1>
+                <h1>نظام إدارة الجمعيات الاحترافية (PWA)</h1>
             </div>
             <div class="header-controls">
-                <button class="btn btn-warning" onclick="exportBackup()">تصدير نسخة احتياطية</button>
+                <button class="btn btn-info" onclick="triggerPWAInstall()" id="installPwaBtn" style="display:none;">تثبيت على سطح المكتب 📲</button>
+                <button class="btn btn-warning" onclick="exportBackup()">تصدير نسخة احتياطية 📥</button>
                 <input type="file" id="importFile" style="display:none" onchange="importBackup(event)">
-                <button class="btn btn-primary" onclick="document.getElementById('importFile').click()">استيراد نسخة</button>
+                <button class="btn btn-primary" onclick="document.getElementById('importFile').click()">استيراد 📤</button>
                 <button class="btn-logout" onclick="logout()">خروج</button>
             </div>
         </header>
 
         <div class="main-container">
-            <!-- شريط الانتقال بين الغرف -->
-            <div class="rooms-bar" id="roomsBar">
-                <!-- شريط الغرف يكتمل أوتوماتيكياً -->
-            </div>
+            <!-- شريط التنقل بين الغرف -->
+            <div class="rooms-bar" id="roomsBar"></div>
 
-            <!-- بطاقات الإحصائيات للغرفة الحالية -->
+            <!-- بطاقات الإحصائيات الشاملة -->
             <div class="stats-grid">
                 <div class="stat-card green">
-                    <h3>رصيد الغرفة الحالية</h3>
+                    <h3>رصيد الخزنة الحالي</h3>
                     <p id="statBalance">0 ج.م</p>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card blue">
                     <h3>عدد الأعضاء</h3>
                     <p id="statMembersCount">0</p>
                 </div>
                 <div class="stat-card amber">
-                    <h3>المبلغ المطلوب اليومي</h3>
-                    <p id="statDailyRequired">0 ج.م</p>
+                    <h3>المحصل اليومي</h3>
+                    <p id="statDailyCollected">0 ج.م</p>
                 </div>
                 <div class="stat-card red">
                     <h3>إجمالي المتأخرات والديون</h3>
@@ -464,26 +516,32 @@
                 </div>
             </div>
 
-            <!-- لوحة الإجراءات وإضافة الأعضاء -->
+            <!-- أدوات الغرفة والتسجيل -->
             <div class="room-actions">
                 <div class="form-inline">
                     <input type="text" id="memberNameInput" placeholder="أدخل اسم العضو الجديد...">
+                    <input type="number" id="memberDailyCustom" placeholder="اليومية (افتراضي 1000)" style="width: 140px;">
                     <button class="btn btn-success" onclick="addNewMember()">إضافة عضو</button>
                 </div>
                 <div>
                     <button class="btn btn-primary" onclick="openPayoutModal()">تسليم جمعية (قبض)</button>
                     <button class="btn btn-danger" onclick="resetDailyStatus()">إعادة ضبط اليوم الجديد</button>
-                    <button class="btn btn-warning" onclick="window.print()">طباعة تقرير</button>
+                    <button class="btn btn-warning" onclick="window.print()">طباعة كشف</button>
                 </div>
             </div>
 
-            <!-- جدول الأعضاء -->
+            <!-- تصفية ومحتوى الجدول -->
+            <div class="filter-box">
+                <input type="text" id="searchInput" placeholder="بحث باسم العضو..." onkeyup="filterMembers()">
+            </div>
+
             <div class="table-container">
                 <table>
                     <thead>
                         <tr>
                             <th>#</th>
                             <th>اسم العضو</th>
+                            <th>اليومية</th>
                             <th>المطلوب شهرياً</th>
                             <th>الحالة اليومية</th>
                             <th>تاريخ آخر دفع</th>
@@ -491,32 +549,28 @@
                             <th>الإجراءات</th>
                         </tr>
                     </thead>
-                    <tbody id="membersTableBody">
-                        <!-- الخانات تُملأ عبر الجافاسكريبت -->
-                    </tbody>
+                    <tbody id="membersTableBody"></tbody>
                 </table>
             </div>
 
             <!-- سجل الأنشطة والعمليات -->
             <div class="logs-section">
-                <h3>سجل العمليات والتغييرات</h3>
-                <ul class="log-list" id="logList">
-                    <!-- الأحداث تُسجل هنا -->
-                </ul>
+                <h3>سجل العمليات والعمليات المالية للغرفة</h3>
+                <ul class="log-list" id="logList"></ul>
             </div>
         </div>
     </div>
 
-    <!-- نافذة تسليم الجمعية (القبض) -->
+    <!-- نافذة التسليم (القبض) -->
     <div class="modal" id="payoutModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>تسليم مبلغ الجمعية للعضو</h3>
+                <h3>تسليم مبلغ الجمعية للعضو القباض</h3>
                 <span class="close-modal" onclick="closePayoutModal()">&times;</span>
             </div>
             <div class="input-group">
                 <label>اختر العضو القباض</label>
-                <select id="payoutMemberSelect" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);"></select>
+                <select id="payoutMemberSelect"></select>
             </div>
             <div class="input-group">
                 <label>المبلغ المستلم (ج.م)</label>
@@ -527,11 +581,9 @@
     </div>
 
     <script>
-        // قواعد البيانات والتخزين المحلي
         const DEFAULT_PASS = "123456";
         const DEFAULT_USER = "admin";
-        const DAILY_RATE = 1000;
-        const MONTHLY_RATE = 30000;
+        let deferredPrompt;
 
         let db = {
             rooms: [
@@ -542,10 +594,43 @@
             logs: []
         };
 
-        // تشغيل البداية
+        // معالجة التثبيت كـ PWA
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const installBtn = document.getElementById('installPwaBtn');
+            if (installBtn) installBtn.style.display = 'inline-flex';
+        });
+
+        function triggerPWAInstall() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('User accepted the PWA install prompt');
+                    }
+                    deferredPrompt = null;
+                });
+            }
+        }
+
+        // مراقبة حالة اتصال الإنترنت
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+
+        function updateOnlineStatus() {
+            const banner = document.getElementById('offlineBanner');
+            if (!navigator.onLine) {
+                banner.classList.add('offline');
+            } else {
+                banner.classList.remove('offline');
+            }
+        }
+
         window.onload = function() {
             loadLocalData();
             checkAuthSession();
+            updateOnlineStatus();
         };
 
         function checkAuthSession() {
@@ -578,24 +663,20 @@
         }
 
         function saveLocalData() {
-            localStorage.setItem("jamia_db", JSON.stringify(db));
+            localStorage.setItem("jamia_pwa_db", JSON.stringify(db));
         }
 
         function loadLocalData() {
-            const saved = localStorage.getItem("jamia_db");
+            const saved = localStorage.getItem("jamia_pwa_db");
             if (saved) {
-                try {
-                    db = JSON.parse(saved);
-                } catch(e) {
-                    console.error("فشل تحويل البيانات الحفظ الاحتياطي.");
-                }
+                try { db = JSON.parse(saved); } catch(e) { console.error("فشل قراءة البيانات المحلية"); }
             }
         }
 
         function addLog(message) {
             const time = new Date().toLocaleTimeString('ar-EG');
             db.logs.unshift(`[${time}] ${message}`);
-            if (db.logs.length > 50) db.logs.pop();
+            if (db.logs.length > 60) db.logs.pop();
             saveLocalData();
         }
 
@@ -657,31 +738,33 @@
             document.getElementById("statBalance").innerText = room.balance.toLocaleString() + " ج.م";
             document.getElementById("statMembersCount").innerText = room.members.length;
 
-            const paidTodayCount = room.members.filter(m => m.paidToday).length;
-            const totalRequired = room.members.length * DAILY_RATE;
-            document.getElementById("statDailyRequired").innerText = totalRequired.toLocaleString() + " ج.م";
+            const collectedToday = room.members.filter(m => m.paidToday).reduce((acc, m) => acc + m.dailyAmount, 0);
+            document.getElementById("statDailyCollected").innerText = collectedToday.toLocaleString() + " ج.م";
 
             const totalDebts = room.members.reduce((acc, curr) => acc + (curr.debt || 0), 0);
             document.getElementById("statDebts").innerText = totalDebts.toLocaleString() + " ج.م";
         }
 
-        function renderTable() {
+        function renderTable(filterText = "") {
             const room = getActiveRoom();
             const tbody = document.getElementById("membersTableBody");
             tbody.innerHTML = "";
 
             if (!room || room.members.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--text-muted);">لا يوجد أعضاء في هذه الغرفة حالياً. قم بإضافة أعضاء للبدء.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color: var(--text-muted);">لا يوجد أعضاء في هذه الغرفة حالياً.</td></tr>`;
                 return;
             }
 
-            room.members.forEach((member, idx) => {
+            const filtered = room.members.filter(m => m.name.toLowerCase().includes(filterText.toLowerCase()));
+
+            filtered.forEach((member, idx) => {
                 const tr = document.createElement("tr");
 
                 tr.innerHTML = `
                     <td>${idx + 1}</td>
                     <td><strong>${member.name}</strong></td>
-                    <td>${MONTHLY_RATE.toLocaleString()} ج.م</td>
+                    <td>${member.dailyAmount.toLocaleString()} ج.م</td>
+                    <td>${(member.dailyAmount * 30).toLocaleString()} ج.م</td>
                     <td>
                         <span class="badge ${member.paidToday ? 'badge-success' : 'badge-danger'}">
                             ${member.paidToday ? 'تم الدفع ✔' : 'لم يدفع بعد ✖'}
@@ -694,7 +777,7 @@
                     <td>
                         <div class="action-cell">
                             <button class="btn ${member.paidToday ? 'btn-danger' : 'btn-success'}" onclick="toggleDailyPay(${member.id})">
-                                ${member.paidToday ? 'تراجع' : 'تحصيل (1000ج)'}
+                                ${member.paidToday ? 'تراجع' : 'تحصيل (' + member.dailyAmount + 'ج)'}
                             </button>
                             <button class="btn btn-warning" onclick="addDebt(${member.id})">+ دين</button>
                             <button class="btn btn-danger" onclick="deleteMember(${member.id})">حذف</button>
@@ -706,9 +789,17 @@
             });
         }
 
+        function filterMembers() {
+            const query = document.getElementById("searchInput").value;
+            renderTable(query);
+        }
+
         function addNewMember() {
-            const input = document.getElementById("memberNameInput");
-            const name = input.value.trim();
+            const nameInput = document.getElementById("memberNameInput");
+            const customDailyInput = document.getElementById("memberDailyCustom");
+
+            const name = nameInput.value.trim();
+            const daily = parseFloat(customDailyInput.value) || 1000;
             const room = getActiveRoom();
 
             if (!name) {
@@ -719,14 +810,16 @@
             const newMember = {
                 id: Date.now(),
                 name: name,
+                dailyAmount: daily,
                 paidToday: false,
                 lastPayDate: null,
                 debt: 0
             };
 
             room.members.push(newMember);
-            input.value = "";
-            addLog(`تمت إضافة العضو [${name}] إلى ${room.name}`);
+            nameInput.value = "";
+            customDailyInput.value = "";
+            addLog(`تمت إضافة العضو [${name}] بيومية ${daily} ج.م إلى ${room.name}`);
             saveLocalData();
             renderApp();
         }
@@ -734,17 +827,16 @@
         function toggleDailyPay(memberId) {
             const room = getActiveRoom();
             const member = room.members.find(m => m.id === memberId);
-
             if (!member) return;
 
             if (!member.paidToday) {
                 member.paidToday = true;
                 member.lastPayDate = new Date().toLocaleDateString('ar-EG');
-                room.balance += DAILY_RATE;
-                addLog(`تم تحصيل 1000 ج.م من العضو [${member.name}]`);
+                room.balance += member.dailyAmount;
+                addLog(`تم تحصيل ${member.dailyAmount} ج.م من العضو [${member.name}]`);
             } else {
                 member.paidToday = false;
-                room.balance -= DAILY_RATE;
+                room.balance -= member.dailyAmount;
                 addLog(`تراجع عن تحصيل العضو [${member.name}]`);
             }
 
@@ -757,7 +849,7 @@
             const member = room.members.find(m => m.id === memberId);
             if (!member) return;
 
-            const amount = prompt(`إضافة مبلغ ديون متأخرة على [${member.name}]:`, "1000");
+            const amount = prompt(`إضافة مبلغ ديون على [${member.name}]:`, member.dailyAmount);
             if (amount && !isNaN(amount)) {
                 member.debt = (member.debt || 0) + parseFloat(amount);
                 addLog(`تم تسجيل دين بقيمة ${amount} ج.م على [${member.name}]`);
@@ -771,7 +863,7 @@
             const member = room.members.find(m => m.id === memberId);
             if (!member) return;
 
-            if (confirm(`هل أنت تأكد من إزالة [${member.name}] من الغرفة؟`)) {
+            if (confirm(`هل أنت تأكد من إزالة [${member.name}]؟`)) {
                 room.members = room.members.filter(m => m.id !== memberId);
                 addLog(`تم حذف العضو [${member.name}] من الغرفة.`);
                 saveLocalData();
@@ -783,14 +875,14 @@
             const room = getActiveRoom();
             if (!room) return;
 
-            if (confirm("هل ترغب في إعادة ضبط حالات الدفع لجميع الأعضاء لليوم الجديد؟ (لن يتأثر الرصيد المجمع)")) {
+            if (confirm("هل ترغب في بدء يوم جديد؟ (سيتلقى غير المدفوعين ديوناً بقيمة يوميتهم)")) {
                 room.members.forEach(m => {
                     if (!m.paidToday) {
-                        m.debt = (m.debt || 0) + DAILY_RATE; // إضافة دين على من لم يدفع
+                        m.debt = (m.debt || 0) + m.dailyAmount;
                     }
                     m.paidToday = false;
                 });
-                addLog(`تم إعادة ضبط اليوم الجديد للغرفة ${room.name} وتسجيل المديونيات للمتأخرين.`);
+                addLog(`تم بدء يوم جديد للغرفة ${room.name}`);
                 saveLocalData();
                 renderApp();
             }
@@ -799,7 +891,7 @@
         function openPayoutModal() {
             const room = getActiveRoom();
             if (!room || room.members.length === 0) {
-                alert("لا يوجد أعضاء في الغرفة لتسليم الجمعية.");
+                alert("لا يوجد أعضاء في الغرفة.");
                 return;
             }
 
@@ -830,9 +922,7 @@
             if (!member || isNaN(amount)) return;
 
             if (amount > room.balance) {
-                if (!confirm("تنبيه: المبلغ المراد تسليمه أكبر من الرصيد المتوفر بالغرفة. هل ترغب بالتسليم بالرغم من ذلك؟")) {
-                    return;
-                }
+                if (!confirm("المبلغ المراد تسليمه أكبر من رصيد الغرفة المتوفر. هل ترغب بالتسليم بالرغم من ذلك؟")) return;
             }
 
             room.balance -= amount;
