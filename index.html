@@ -1,27 +1,49 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+    <!-- ========================================== -->
+    <!--          إعدادات الترميز والميتا          -->
+    <!-- ========================================== -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#1e3c72">
-    <meta name="description" content="نظام متكامل لإدارة الجمعيات المالية وتتبع المدفوعات أوفلاين">
-    <title>نظام إدارة الجمعيات الذكي - الإصدار الاحترافي</title>
+    <meta name="description" content="نظام إدارة الجمعيات الذكي والاحترافي المعتمد على تقنيات PWA للعمل أوفلاين كلياً بدعم تصدير PDF والنسخ الاحتياطي.">
+    <meta name="author" content="Jamia Management System">
+    
+    <title>نظام إدارة الجمعيات الشامل - PWA الاحترافي</title>
 
-    <!-- ربط ملف الـ Manifest والـ Service Worker للتثبيت كـ PWA -->
+    <!-- ========================================== -->
+    <!--         المكتبات الخارجية والروابط         -->
+    <!-- ========================================== -->
+    <!-- مكتبة HTML2PDF لإنشاء وتنزيل التقارير بصيغة PDF عالية الجودة -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <!-- ربط ملف المانيفست الخاص بتطبيقات الويب التقدمية (PWA) -->
     <link rel="manifest" href="manifest.json">
+    
+    <!-- تسجيل الخدمة الأوفلاين Service Worker -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('sw.js')
-            .then(reg => console.log('Service Worker Registered Successfully', reg.scope))
-            .catch(err => console.error('Service Worker Registration Failed', err));
+            .then(registration => {
+              console.log('تم تسجيل Service Worker بنجاح مع النطاق:', registration.scope);
+            })
+            .catch(error => {
+              console.error('فشل تسجيل Service Worker:', error);
+            });
         });
       }
     </script>
 
+    <!-- ========================================== -->
+    <!--            التنسيقات البرمجية CSS          -->
+    <!-- ========================================== -->
     <style>
+        /* المتغيرات الأساسية لتناسق الألوان في التطبيق */
         :root {
             --primary-color: #1e3c72;
+            --primary-gradient: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             --secondary-color: #2a5298;
             --accent-color: #00c853;
             --danger-color: #d50000;
@@ -32,14 +54,20 @@
             --text-dark: #2c3e50;
             --text-muted: #7f8c8d;
             --border-color: #e0e0e0;
+            --shadow-light: 0 4px 12px rgba(0,0,0,0.05);
+            --shadow-medium: 0 8px 24px rgba(0,0,0,0.12);
+            --radius-small: 8px;
+            --radius-medium: 12px;
+            --radius-large: 16px;
         }
 
+        /* إعادة ضبط الهوامش الافتراضية للجميع */
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
@@ -48,6 +76,23 @@
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            direction: rtl;
+        }
+
+        /* شريط التنبيه عند انقطاع الإنترنت */
+        .status-banner {
+            padding: 12px 20px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            background-color: var(--warning-color);
+            color: #111111;
+            display: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+
+        .status-banner.offline {
+            display: block;
         }
 
         /* شاشة تسجيل الدخول */
@@ -57,7 +102,7 @@
             left: 0;
             width: 100vw;
             height: 100vh;
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            background: var(--primary-gradient);
             display: flex;
             justify-content: center;
             align-items: center;
@@ -66,10 +111,10 @@
 
         .login-card {
             background: var(--card-bg);
-            padding: 40px;
-            border-radius: 16px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            width: 100%;
+            padding: 45px 35px;
+            border-radius: var(--radius-large);
+            box-shadow: var(--shadow-medium);
+            width: 90%;
             max-width: 420px;
             text-align: center;
         }
@@ -77,198 +122,151 @@
         .login-card h2 {
             margin-bottom: 25px;
             color: var(--primary-color);
-            font-size: 24px;
+            font-size: 26px;
         }
 
-        .input-group {
+        .form-group-login {
             margin-bottom: 20px;
             text-align: right;
         }
 
-        .input-group label {
+        .form-group-login label {
             display: block;
             margin-bottom: 8px;
             font-size: 14px;
             color: var(--text-muted);
         }
 
-        .input-group input, .input-group select {
+        .form-group-login input {
             width: 100%;
-            padding: 12px 15px;
+            padding: 14px;
             border: 2px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 16px;
+            border-radius: var(--radius-small);
             outline: none;
-            transition: 0.3s;
+            font-size: 15px;
+            transition: border-color 0.3s;
         }
 
-        .input-group input:focus, .input-group select:focus {
+        .form-group-login input:focus {
             border-color: var(--secondary-color);
         }
 
         .btn-login {
             width: 100%;
             padding: 14px;
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-            color: white;
+            background: var(--primary-gradient);
+            color: #ffffff;
             border: none;
-            border-radius: 8px;
-            font-size: 16px;
+            border-radius: var(--radius-small);
             font-weight: bold;
+            font-size: 16px;
             cursor: pointer;
-            transition: 0.3s;
+            transition: transform 0.2s, opacity 0.2s;
         }
 
         .btn-login:hover {
-            opacity: 0.9;
+            opacity: 0.95;
             transform: translateY(-2px);
         }
 
-        /* الهيكل الرئيسي للتطبيق */
+        /* رأس الصفحة (Header) */
         .app-header {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-            color: white;
-            padding: 15px 30px;
+            background: var(--primary-gradient);
+            color: #ffffff;
+            padding: 20px 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            flex-wrap: wrap;
+            gap: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
         }
 
         .header-title h1 {
             font-size: 22px;
+            font-weight: 700;
         }
 
         .header-controls {
             display: flex;
-            gap: 12px;
-            align-items: center;
+            gap: 10px;
             flex-wrap: wrap;
+            align-items: center;
         }
 
-        .btn-logout {
-            background: rgba(255,255,255,0.2);
-            color: white;
-            border: 1px solid white;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: 0.3s;
-        }
-
-        .btn-logout:hover {
-            background: rgba(255,255,255,0.4);
-        }
-
+        /* الحاوية الرئيسية للمحتوى */
         .main-container {
             padding: 30px;
-            flex: 1;
             max-width: 1400px;
             margin: 0 auto;
             width: 100%;
+            flex: 1;
         }
 
-        /* شريط التنبيهات أوفلاين/أونلاين */
-        .status-banner {
-            padding: 10px;
-            text-align: center;
-            font-size: 14px;
-            font-weight: bold;
-            color: white;
-            display: none;
-        }
-        .status-banner.offline {
-            background-color: var(--warning-color);
-            color: black;
-            display: block;
-        }
-
-        /* نظام الغرف */
-        .rooms-bar {
-            display: flex;
-            gap: 12px;
+        /* شريط شرح الفكرة والخطة الحالية */
+        .cycle-box {
+            background: #e8f4fd;
+            border: 1px solid #b6e0fe;
+            padding: 20px;
+            border-radius: var(--radius-medium);
             margin-bottom: 25px;
-            overflow-x: auto;
-            padding-bottom: 5px;
-        }
-
-        .room-tab {
-            padding: 12px 24px;
-            background: var(--card-bg);
-            border: 2px solid var(--border-color);
-            border-radius: 10px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.3s;
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 8px;
-            color: var(--text-dark);
-            white-space: nowrap;
+            flex-wrap: wrap;
+            gap: 15px;
         }
 
-        .room-tab.active {
-            background: var(--primary-color);
-            color: white;
-            border-color: var(--primary-color);
+        .cycle-info {
+            font-size: 15px;
+            line-height: 1.6;
         }
 
-        .btn-add-room {
-            background: var(--accent-color);
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: 0.3s;
-            white-space: nowrap;
-        }
-
-        .btn-add-room:hover {
-            opacity: 0.9;
-        }
-
-        /* بطاقات الإحصائيات */
+        /* شبكة بطاقات الإحصائيات */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
 
         .stat-card {
             background: var(--card-bg);
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-            border-right: 5px solid var(--primary-color);
+            padding: 22px;
+            border-radius: var(--radius-medium);
+            border-right: 6px solid var(--primary-color);
+            box-shadow: var(--shadow-light);
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
         }
 
         .stat-card.green { border-color: var(--accent-color); }
-        .stat-card.red { border-color: var(--danger-color); }
         .stat-card.amber { border-color: var(--warning-color); }
         .stat-card.blue { border-color: var(--info-color); }
+        .stat-card.red { border-color: var(--danger-color); }
 
         .stat-card h3 {
-            font-size: 14px;
+            font-size: 13px;
             color: var(--text-muted);
             margin-bottom: 8px;
+            text-transform: uppercase;
         }
 
         .stat-card p {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: bold;
         }
 
-        /* أدوات الإدارة والإعدادات */
+        /* أدوات الإدارة والإضافة */
         .room-actions {
             background: var(--card-bg);
-            padding: 20px;
-            border-radius: 12px;
+            padding: 22px;
+            border-radius: var(--radius-medium);
             margin-bottom: 25px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            box-shadow: var(--shadow-light);
             display: flex;
             flex-wrap: wrap;
             gap: 15px;
@@ -284,57 +282,47 @@
         }
 
         .form-inline input {
-            flex: 1;
-            padding: 10px 15px;
+            padding: 12px 15px;
             border: 1px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 14px;
+            border-radius: var(--radius-small);
             outline: none;
+            flex: 1;
+            font-size: 14px;
         }
 
+        /* تنسيق الأزرار العامة */
         .btn {
-            padding: 10px 18px;
+            padding: 12px 18px;
             border: none;
-            border-radius: 8px;
+            border-radius: var(--radius-small);
             font-weight: bold;
             cursor: pointer;
-            transition: 0.3s;
+            transition: background-color 0.2s, opacity 0.2s;
             display: inline-flex;
             align-items: center;
-            justify-content: center;
             gap: 8px;
             font-size: 14px;
+            justify-content: center;
         }
 
-        .btn-primary { background: var(--secondary-color); color: white; }
-        .btn-success { background: var(--accent-color); color: white; }
-        .btn-danger { background: var(--danger-color); color: white; }
-        .btn-warning { background: var(--warning-color); color: black; }
-        .btn-info { background: var(--info-color); color: white; }
+        .btn-primary { background-color: var(--secondary-color); color: #ffffff; }
+        .btn-success { background-color: var(--accent-color); color: #ffffff; }
+        .btn-danger { background-color: var(--danger-color); color: #ffffff; }
+        .btn-warning { background-color: var(--warning-color); color: #111111; }
+        .btn-info { background-color: var(--info-color); color: #ffffff; }
 
-        .btn:hover { opacity: 0.9; }
-
-        /* تصفية وحسابات */
-        .filter-box {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-            align-items: center;
+        .btn:hover {
+            opacity: 0.9;
         }
 
-        .filter-box input {
-            padding: 8px 12px;
-            border-radius: 6px;
-            border: 1px solid var(--border-color);
-            width: 250px;
-        }
-
-        /* الجدول الرئيسي */
+        /* قسم جدول البيانات */
         .table-container {
             background: var(--card-bg);
-            border-radius: 12px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            border-radius: var(--radius-medium);
+            box-shadow: var(--shadow-light);
             overflow-x: auto;
+            padding: 20px;
+            margin-bottom: 30px;
         }
 
         table {
@@ -343,26 +331,24 @@
             text-align: right;
         }
 
-        th {
-            background: #f8f9fa;
-            padding: 16px;
-            font-weight: bold;
-            color: var(--text-muted);
-            border-bottom: 2px solid var(--border-color);
+        th, td {
+            padding: 15px 18px;
+            border-bottom: 1px solid var(--border-color);
             white-space: nowrap;
+            font-size: 14px;
         }
 
-        td {
-            padding: 16px;
-            border-bottom: 1px solid var(--border-color);
-            vertical-align: middle;
-            white-space: nowrap;
+        th {
+            background-color: #f8f9fa;
+            color: var(--text-muted);
+            font-weight: bold;
         }
 
         tr:hover {
-            background-color: #f8f9fa;
+            background-color: #f9fbfd;
         }
 
+        /* الشارات والتسميات */
         .badge {
             padding: 6px 12px;
             border-radius: 20px;
@@ -371,13 +357,38 @@
             display: inline-block;
         }
 
-        .badge-success { background: #e8f5e9; color: var(--accent-color); }
-        .badge-danger { background: #ffebee; color: var(--danger-color); }
+        .badge-success { background-color: #e8f5e9; color: var(--accent-color); }
+        .badge-danger { background-color: #ffebee; color: var(--danger-color); }
 
-        .action-cell {
-            display: flex;
-            gap: 8px;
-            justify-content: flex-start;
+        /* سجل الأنشطة والعمليات */
+        .logs-section {
+            background: var(--card-bg);
+            padding: 22px;
+            border-radius: var(--radius-medium);
+            box-shadow: var(--shadow-light);
+        }
+
+        .logs-section h3 {
+            margin-bottom: 15px;
+            font-size: 16px;
+            color: var(--primary-color);
+        }
+
+        .log-list {
+            list-style: none;
+            max-height: 180px;
+            overflow-y: auto;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .log-item {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .log-item:last-child {
+            border-bottom: none;
         }
 
         /* النوافذ العائمة (Modals) */
@@ -387,7 +398,7 @@
             left: 0;
             width: 100vw;
             height: 100vh;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.5);
             display: none;
             justify-content: center;
             align-items: center;
@@ -401,10 +412,10 @@
         .modal-content {
             background: var(--card-bg);
             padding: 30px;
-            border-radius: 12px;
-            width: 100%;
-            max-width: 500px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            border-radius: var(--radius-medium);
+            width: 90%;
+            max-width: 450px;
+            box-shadow: var(--shadow-medium);
         }
 
         .modal-header {
@@ -415,373 +426,312 @@
         }
 
         .close-modal {
-            font-size: 22px;
+            font-size: 24px;
             cursor: pointer;
             color: var(--text-muted);
         }
 
-        /* السجل المالي والأحداث */
-        .logs-section {
-            margin-top: 30px;
-            background: var(--card-bg);
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-        }
-
-        .logs-section h3 {
-            margin-bottom: 15px;
-            color: var(--primary-color);
-        }
-
-        .log-list {
-            list-style: none;
-            max-height: 180px;
-            overflow-y: auto;
-            font-size: 13px;
-        }
-
-        .log-item {
-            padding: 8px 0;
-            border-bottom: 1px solid var(--border-color);
-            color: var(--text-muted);
-        }
-
+        /* تنسيقات خاصة بالطباعة والتصدير */
         @media print {
-            .app-header, .rooms-bar, .room-actions, .action-cell, .btn, .logs-section, #loginScreen, .filter-box {
+            .app-header, .cycle-box, .room-actions, .no-print, .logs-section, #loginScreen, .status-banner {
                 display: none !important;
             }
-            .main-container { padding: 0; }
-            .stat-card { border: 1px solid #ccc; }
+            .main-container {
+                padding: 0;
+            }
+            .table-container {
+                box-shadow: none;
+                border: 1px solid #ccc;
+            }
         }
     </style>
 </head>
 <body>
 
-    <!-- شريط حالة الأوفلاين -->
-    <div id="offlineBanner" class="status-banner">أنت تعمل حالياً في الوضع الأوفلاين - يتم حفظ جميع التغييرات محلياً تلقائياً</div>
+    <!-- ========================================== -->
+    <!--         واجهة حالة الشبكة والأوفلاين        -->
+    <!-- ========================================== -->
+    <div id="offlineBanner" class="status-banner">
+        تنبيه: أنت تعمل حالياً أوفلاين (بدون إنترنت). يتم حفظ كل البيانات والتحصيلات محلياً بصفة أوتوماتيكية.
+    </div>
 
-    <!-- شاشة تسجيل الدخول -->
+    <!-- ========================================== -->
+    <!--            شاشة تسجيل الدخول              -->
+    <!-- ========================================== -->
     <div id="loginScreen">
         <div class="login-card">
-            <h2>لوحة تحكم الجمعيات</h2>
-            <div class="input-group">
-                <label>اسم المستخدم</label>
+            <h2>نظام إدارة الجمعيات</h2>
+            <div class="form-group-login">
+                <label for="loginUser">اسم المستخدم</label>
                 <input type="text" id="loginUser" value="admin" placeholder="أدخل اسم المستخدم">
             </div>
-            <div class="input-group">
-                <label>كلمة المرور</label>
+            <div class="form-group-login">
+                <label for="loginPass">كلمة المرور</label>
                 <input type="password" id="loginPass" value="123456" placeholder="أدخل كلمة المرور">
             </div>
-            <button class="btn-login" onclick="login()">دخول لوحة التحكم</button>
+            <button class="btn-login" onclick="login()">دخول اللوحة</button>
         </div>
     </div>
 
-    <!-- التطبيق الرئيسي -->
+    <!-- ========================================== -->
+    <!--            الهيكل الرئيسي للتطبيق           -->
+    <!-- ========================================== -->
     <div id="appBody" style="display:none;">
         <header class="app-header">
             <div class="header-title">
-                <h1>نظام إدارة الجمعيات الاحترافية (PWA)</h1>
+                <h1>نظام الجمعية المركبة (100ج يومياً ⬅ 30,000ج شهرياً)</h1>
             </div>
             <div class="header-controls">
-                <button class="btn btn-info" onclick="triggerPWAInstall()" id="installPwaBtn" style="display:none;">تثبيت على سطح المكتب 📲</button>
+                <button class="btn btn-info" onclick="exportToPDF()">حفظ الكشف PDF 📄</button>
                 <button class="btn btn-warning" onclick="exportBackup()">تصدير نسخة احتياطية 📥</button>
                 <input type="file" id="importFile" style="display:none" onchange="importBackup(event)">
-                <button class="btn btn-primary" onclick="document.getElementById('importFile').click()">استيراد 📤</button>
-                <button class="btn-logout" onclick="logout()">خروج</button>
+                <button class="btn btn-primary" onclick="document.getElementById('importFile').click()">استيراد نسخة 📤</button>
+                <button class="btn btn-danger" onclick="logout()">خروج</button>
             </div>
         </header>
 
         <div class="main-container">
-            <!-- شريط التنقل بين الغرف -->
-            <div class="rooms-bar" id="roomsBar"></div>
+            <!-- صندوق توضيح وآلية عمل الجمعية -->
+            <div class="cycle-box">
+                <div class="cycle-info">
+                    <strong>💡 آلية عمل الخطة المركبة:</strong> يدفع كل فرد 100 جنيه يومياً، لتتجمع 1,000 جنيه كدفعة أولى كل 10 أيام. بنهاية الشهر يكون الفرد قد جمع 3,000 جنيه يدخل بها تلقائياً في الجمعية الكبرى لاستلام <strong>30,000 جنيه</strong> في دوره.
+                </div>
+                <button class="btn btn-success" onclick="openPayoutModal()">تسليم الجمعية الشهرية (30,000ج) 💰</button>
+            </div>
 
-            <!-- بطاقات الإحصائيات الشاملة -->
+            <!-- بطاقات الإحصائيات العامة -->
             <div class="stats-grid">
                 <div class="stat-card green">
-                    <h3>رصيد الخزنة الحالي</h3>
+                    <h3>إجمالي رصيد الخزنة</h3>
                     <p id="statBalance">0 ج.م</p>
                 </div>
                 <div class="stat-card blue">
-                    <h3>عدد الأعضاء</h3>
-                    <p id="statMembersCount">0</p>
-                </div>
-                <div class="stat-card amber">
-                    <h3>المحصل اليومي</h3>
+                    <h3>المحصل اليومي الحالي</h3>
                     <p id="statDailyCollected">0 ج.م</p>
                 </div>
+                <div class="stat-card amber">
+                    <h3>متوسط المجمع لكل فرد هذا الشهر</h3>
+                    <p id="statMonthlyPerMember">0 / 3,000 ج.م</p>
+                </div>
                 <div class="stat-card red">
-                    <h3>إجمالي المتأخرات والديون</h3>
+                    <h3>إجمالي الديون والمتأخرات</h3>
                     <p id="statDebts">0 ج.م</p>
                 </div>
             </div>
 
-            <!-- أدوات الغرفة والتسجيل -->
+            <!-- شريط العمليات والتحصيلات -->
             <div class="room-actions">
                 <div class="form-inline">
                     <input type="text" id="memberNameInput" placeholder="أدخل اسم العضو الجديد...">
-                    <input type="number" id="memberDailyCustom" placeholder="اليومية (افتراضي 1000)" style="width: 140px;">
-                    <button class="btn btn-success" onclick="addNewMember()">إضافة عضو</button>
+                    <button class="btn btn-success" onclick="addNewMember()">إضافة عضو جديد</button>
                 </div>
                 <div>
-                    <button class="btn btn-primary" onclick="openPayoutModal()">تسليم جمعية (قبض)</button>
-                    <button class="btn btn-danger" onclick="resetDailyStatus()">إعادة ضبط اليوم الجديد</button>
-                    <button class="btn btn-warning" onclick="window.print()">طباعة كشف</button>
+                    <button class="btn btn-danger" onclick="resetDailyStatus()">بدء يوم جديد 🌅</button>
+                    <button class="btn btn-warning" onclick="window.print()">طباعة الكشف 🖨️</button>
                 </div>
             </div>
 
-            <!-- تصفية ومحتوى الجدول -->
-            <div class="filter-box">
-                <input type="text" id="searchInput" placeholder="بحث باسم العضو..." onkeyup="filterMembers()">
-            </div>
-
-            <div class="table-container">
+            <!-- جدول عرض قائمة الأعضاء والحالات -->
+            <div class="table-container" id="pdfReportArea">
+                <h2 style="margin-bottom: 15px; font-size: 18px; text-align: center; display:none;" id="pdfHeader">كشف حساب الجمعية اليومية والشهرية</h2>
                 <table>
                     <thead>
                         <tr>
                             <th>#</th>
                             <th>اسم العضو</th>
-                            <th>اليومية</th>
-                            <th>المطلوب شهرياً</th>
-                            <th>الحالة اليومية</th>
+                            <th>القسط اليومي</th>
+                            <th>المحصّل الشهري</th>
+                            <th>حالة اليوم (100ج)</th>
                             <th>تاريخ آخر دفع</th>
-                            <th>المتأخرات</th>
-                            <th>الإجراءات</th>
+                            <th>الديون المتأخرة</th>
+                            <th class="no-print">الإجراءات والتحصيل</th>
                         </tr>
                     </thead>
-                    <tbody id="membersTableBody"></tbody>
+                    <tbody id="membersTableBody">
+                        <!-- سينشأ المحتوى أوتوماتيكياً عبر JavaScript -->
+                    </tbody>
                 </table>
             </div>
 
-            <!-- سجل الأنشطة والعمليات -->
+            <!-- سجل متابعة الأنشطة والعمليات المالية -->
             <div class="logs-section">
-                <h3>سجل العمليات والعمليات المالية للغرفة</h3>
-                <ul class="log-list" id="logList"></ul>
+                <h3>سجل التحصيلات والعمليات المالية</h3>
+                <ul class="log-list" id="logList">
+                    <!-- تتولى دالة renderLogs إدراج السجل هنا -->
+                </ul>
             </div>
         </div>
     </div>
 
-    <!-- نافذة التسليم (القبض) -->
+    <!-- نافذة تسليم الجمعية الشهرية العائمة -->
     <div class="modal" id="payoutModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>تسليم مبلغ الجمعية للعضو القباض</h3>
+                <h3>تسليم مبلغ الجمعية الكبرى</h3>
                 <span class="close-modal" onclick="closePayoutModal()">&times;</span>
             </div>
-            <div class="input-group">
-                <label>اختر العضو القباض</label>
-                <select id="payoutMemberSelect"></select>
+            <div class="form-group-login">
+                <label>اختر العضو المستلم (القباض)</label>
+                <select id="payoutMemberSelect" style="width:100%; padding:10px; border-radius:6px; margin-top:5px;"></select>
             </div>
-            <div class="input-group">
+            <div class="form-group-login">
                 <label>المبلغ المستلم (ج.م)</label>
-                <input type="number" id="payoutAmountInput" value="300000">
+                <input type="number" id="payoutAmountInput" value="30000">
             </div>
-            <button class="btn btn-success" style="width: 100%;" onclick="processPayout()">تأكيد عملية التسليم والخصم</button>
+            <button class="btn btn-success" style="width: 100%; margin-top: 10px;" onclick="processMonthlyPayout()">تأكيد عملية التسليم والخصم</button>
         </div>
     </div>
 
+    <!-- ========================================== -->
+    <!--            المنطق البرمجي JavaScript        -->
+    <!-- ========================================== -->
     <script>
+        // الاعتمادات والبيانات الافتراضية
         const DEFAULT_PASS = "123456";
         const DEFAULT_USER = "admin";
-        let deferredPrompt;
 
         let db = {
-            rooms: [
-                { id: 1, name: "الغرفة الأولى (1000ج)", balance: 0, members: [] },
-                { id: 2, name: "الغرفة الثانية (1000ج)", balance: 0, members: [] }
+            balance: 0,
+            members: [
+                { id: 1, name: "محمد", dailyAmount: 100, monthlyAccumulated: 0, paidToday: false, lastPayDate: null, debt: 0 },
+                { id: 2, name: "أحمد", dailyAmount: 100, monthlyAccumulated: 0, paidToday: false, lastPayDate: null, debt: 0 },
+                { id: 3, name: "عبدالله", dailyAmount: 100, monthlyAccumulated: 0, paidToday: false, lastPayDate: null, debt: 0 },
+                { id: 4, name: "وليد", dailyAmount: 100, monthlyAccumulated: 0, paidToday: false, lastPayDate: null, debt: 0 },
+                { id: 5, name: "سالم", dailyAmount: 100, monthlyAccumulated: 0, paidToday: false, lastPayDate: null, debt: 0 },
+                { id: 6, name: "إبراهيم", dailyAmount: 100, monthlyAccumulated: 0, paidToday: false, lastPayDate: null, debt: 0 },
+                { id: 7, name: "حسين", dailyAmount: 100, monthlyAccumulated: 0, paidToday: false, lastPayDate: null, debt: 0 },
+                { id: 8, name: "خالد", dailyAmount: 100, monthlyAccumulated: 0, paidToday: false, lastPayDate: null, debt: 0 },
+                { id: 9, name: "كامل", dailyAmount: 100, monthlyAccumulated: 0, paidToday: false, lastPayDate: null, debt: 0 },
+                { id: 10, name: "مصطفى", dailyAmount: 100, monthlyAccumulated: 0, paidToday: false, lastPayDate: null, debt: 0 }
             ],
-            activeRoomId: 1,
             logs: []
         };
 
-        // معالجة التثبيت كـ PWA
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            const installBtn = document.getElementById('installPwaBtn');
-            if (installBtn) installBtn.style.display = 'inline-flex';
-        });
-
-        function triggerPWAInstall() {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then((choiceResult) => {
-                    if (choiceResult.outcome === 'accepted') {
-                        console.log('User accepted the PWA install prompt');
-                    }
-                    deferredPrompt = null;
-                });
-            }
-        }
-
-        // مراقبة حالة اتصال الإنترنت
+        // مراقبة الاتصال بالشبكة
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
 
         function updateOnlineStatus() {
             const banner = document.getElementById('offlineBanner');
-            if (!navigator.onLine) {
-                banner.classList.add('offline');
-            } else {
-                banner.classList.remove('offline');
+            if (banner) {
+                banner.classList.toggle('offline', !navigator.onLine);
             }
         }
 
+        // عند تحميل المستند بالكامل
         window.onload = function() {
             loadLocalData();
             checkAuthSession();
             updateOnlineStatus();
         };
 
+        // التحقق من حالة الجلسة
         function checkAuthSession() {
-            if (sessionStorage.getItem("isLoggedIn") === "true") {
-                document.getElementById("loginScreen").style.display = "none";
-                document.getElementById("appBody").style.display = "block";
+            const isLoggedIn = sessionStorage.getItem("isLoggedIn") === "true";
+            document.getElementById("loginScreen").style.display = isLoggedIn ? "none" : "flex";
+            document.getElementById("appBody").style.display = isLoggedIn ? "block" : "none";
+            if (isLoggedIn) {
                 renderApp();
-            } else {
-                document.getElementById("loginScreen").style.display = "flex";
-                document.getElementById("appBody").style.display = "none";
             }
         }
 
+        // تسجيل الدخول
         function login() {
-            const user = document.getElementById("loginUser").value;
-            const pass = document.getElementById("loginPass").value;
+            const user = document.getElementById("loginUser").value.trim();
+            const pass = document.getElementById("loginPass").value.trim();
 
             if (user === DEFAULT_USER && pass === DEFAULT_PASS) {
                 sessionStorage.setItem("isLoggedIn", "true");
-                addLog("تسجيل دخول ناجح للوحة التحكم.");
+                addLog("تسجيل دخول ناجح إلى النظام.");
                 checkAuthSession();
             } else {
-                alert("بيانات الدخول غير صحيحة! كلمة المرور الافتراضية: 123456");
+                alert("بيانات الدخول غير صحيحة! (الافتراضي: admin / 123456)");
             }
         }
 
+        // تسجيل الخروج
         function logout() {
             sessionStorage.removeItem("isLoggedIn");
             checkAuthSession();
         }
 
+        // التخزين والاسترجاع المحتويين
         function saveLocalData() {
-            localStorage.setItem("jamia_pwa_db", JSON.stringify(db));
+            localStorage.setItem("jamia_30k_full_db", JSON.stringify(db));
         }
 
         function loadLocalData() {
-            const saved = localStorage.getItem("jamia_pwa_db");
+            const saved = localStorage.getItem("jamia_30k_full_db");
             if (saved) {
-                try { db = JSON.parse(saved); } catch(e) { console.error("فشل قراءة البيانات المحلية"); }
+                try {
+                    db = JSON.parse(saved);
+                } catch (e) {
+                    console.error("خطأ في قراءة البيانات المحلية المخزنة:", e);
+                }
             }
         }
 
-        function addLog(message) {
-            const time = new Date().toLocaleTimeString('ar-EG');
-            db.logs.unshift(`[${time}] ${message}`);
-            if (db.logs.length > 60) db.logs.pop();
+        // إضافة سجل جديد
+        function addLog(msg) {
+            const dateStr = new Date().toLocaleTimeString('ar-EG');
+            db.logs.unshift(`[${dateStr}] ${msg}`);
+            if (db.logs.length > 50) db.logs.pop();
             saveLocalData();
         }
 
-        function getActiveRoom() {
-            return db.rooms.find(r => r.id === db.activeRoomId);
-        }
-
+        // تحديث وعرض كل عناصر الواجهة
         function renderApp() {
-            renderRoomsBar();
             renderStats();
             renderTable();
             renderLogs();
         }
 
-        function renderRoomsBar() {
-            const bar = document.getElementById("roomsBar");
-            bar.innerHTML = "";
-
-            db.rooms.forEach(room => {
-                const tab = document.createElement("div");
-                tab.className = `room-tab ${room.id === db.activeRoomId ? 'active' : ''}`;
-                tab.innerText = room.name;
-                tab.onclick = () => {
-                    db.activeRoomId = room.id;
-                    saveLocalData();
-                    renderApp();
-                };
-                bar.appendChild(tab);
-            });
-
-            const addBtn = document.createElement("button");
-            addBtn.className = "btn-add-room";
-            addBtn.innerText = "+ إضافة غرفة جديدة";
-            addBtn.onclick = createNewRoom;
-            bar.appendChild(addBtn);
-        }
-
-        function createNewRoom() {
-            const name = prompt("أدخل اسم الغرفة الجديدة:");
-            if (name && name.trim() !== "") {
-                const newId = db.rooms.length ? Math.max(...db.rooms.map(r => r.id)) + 1 : 1;
-                db.rooms.push({
-                    id: newId,
-                    name: name.trim(),
-                    balance: 0,
-                    members: []
-                });
-                db.activeRoomId = newId;
-                addLog(`تم إنشاء غرفة جديدة باسم: ${name}`);
-                saveLocalData();
-                renderApp();
-            }
-        }
-
+        // عرض بطاقات الإحصاءات
         function renderStats() {
-            const room = getActiveRoom();
-            if (!room) return;
-
-            document.getElementById("statBalance").innerText = room.balance.toLocaleString() + " ج.م";
-            document.getElementById("statMembersCount").innerText = room.members.length;
-
-            const collectedToday = room.members.filter(m => m.paidToday).reduce((acc, m) => acc + m.dailyAmount, 0);
+            document.getElementById("statBalance").innerText = db.balance.toLocaleString() + " ج.م";
+            
+            const collectedToday = db.members.filter(m => m.paidToday).reduce((acc, m) => acc + m.dailyAmount, 0);
             document.getElementById("statDailyCollected").innerText = collectedToday.toLocaleString() + " ج.م";
 
-            const totalDebts = room.members.reduce((acc, curr) => acc + (curr.debt || 0), 0);
+            const avgMonthly = db.members.length ? Math.round(db.members.reduce((acc, m) => acc + m.monthlyAccumulated, 0) / db.members.length) : 0;
+            document.getElementById("statMonthlyPerMember").innerText = `${avgMonthly.toLocaleString()} / 3,000 ج.م`;
+
+            const totalDebts = db.members.reduce((acc, m) => acc + (m.debt || 0), 0);
             document.getElementById("statDebts").innerText = totalDebts.toLocaleString() + " ج.م";
         }
 
-        function renderTable(filterText = "") {
-            const room = getActiveRoom();
+        // عرض جدول الأعضاء
+        function renderTable() {
             const tbody = document.getElementById("membersTableBody");
             tbody.innerHTML = "";
 
-            if (!room || room.members.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color: var(--text-muted);">لا يوجد أعضاء في هذه الغرفة حالياً.</td></tr>`;
+            if (db.members.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color: var(--text-muted);">لا يوجد أعضاء مضافين حالياً.</td></tr>`;
                 return;
             }
 
-            const filtered = room.members.filter(m => m.name.toLowerCase().includes(filterText.toLowerCase()));
-
-            filtered.forEach((member, idx) => {
+            db.members.forEach((member, idx) => {
                 const tr = document.createElement("tr");
 
                 tr.innerHTML = `
                     <td>${idx + 1}</td>
                     <td><strong>${member.name}</strong></td>
-                    <td>${member.dailyAmount.toLocaleString()} ج.م</td>
-                    <td>${(member.dailyAmount * 30).toLocaleString()} ج.م</td>
+                    <td>${member.dailyAmount} ج.م</td>
+                    <td><strong>${member.monthlyAccumulated.toLocaleString()} / 3,000 ج.م</strong></td>
                     <td>
                         <span class="badge ${member.paidToday ? 'badge-success' : 'badge-danger'}">
-                            ${member.paidToday ? 'تم الدفع ✔' : 'لم يدفع بعد ✖'}
+                            ${member.paidToday ? 'تم الدفع ✔' : 'لم يدفع ✖'}
                         </span>
                     </td>
                     <td>${member.lastPayDate || 'لا يوجد'}</td>
-                    <td style="color: ${member.debt > 0 ? 'var(--danger-color)' : 'inherit'}; font-weight: bold;">
-                        ${(member.debt || 0).toLocaleString()} ج.م
+                    <td style="color:${member.debt > 0 ? 'var(--danger-color)' : 'inherit'}; font-weight:bold;">
+                        ${member.debt.toLocaleString()} ج.م
                     </td>
-                    <td>
-                        <div class="action-cell">
-                            <button class="btn ${member.paidToday ? 'btn-danger' : 'btn-success'}" onclick="toggleDailyPay(${member.id})">
-                                ${member.paidToday ? 'تراجع' : 'تحصيل (' + member.dailyAmount + 'ج)'}
-                            </button>
-                            <button class="btn btn-warning" onclick="addDebt(${member.id})">+ دين</button>
-                            <button class="btn btn-danger" onclick="deleteMember(${member.id})">حذف</button>
-                        </div>
+                    <td class="no-print">
+                        <button class="btn ${member.paidToday ? 'btn-danger' : 'btn-success'}" onclick="toggleDailyPay(${member.id})">
+                            ${member.paidToday ? 'تراجع' : 'تحصيل (100ج)'}
+                        </button>
+                        <button class="btn btn-danger" onclick="deleteMember(${member.id})">حذف</button>
                     </td>
                 `;
 
@@ -789,116 +739,91 @@
             });
         }
 
-        function filterMembers() {
-            const query = document.getElementById("searchInput").value;
-            renderTable(query);
+        // تحصيل اليومية أو التراجع عنها
+        function toggleDailyPay(id) {
+            const m = db.members.find(x => x.id === id);
+            if (!m) return;
+
+            if (!m.paidToday) {
+                m.paidToday = true;
+                m.monthlyAccumulated += m.dailyAmount;
+                db.balance += m.dailyAmount;
+                m.lastPayDate = new Date().toLocaleDateString('ar-EG');
+                addLog(`تم تحصيل 100ج من العضو [${m.name}] - (المجموع الشهري: ${m.monthlyAccumulated}ج)`);
+            } else {
+                m.paidToday = false;
+                m.monthlyAccumulated -= m.dailyAmount;
+                db.balance -= m.dailyAmount;
+                addLog(`إلغاء تحصيل من العضو [${m.name}]`);
+            }
+
+            saveLocalData();
+            renderApp();
         }
 
+        // إضافة عضو جديد
         function addNewMember() {
-            const nameInput = document.getElementById("memberNameInput");
-            const customDailyInput = document.getElementById("memberDailyCustom");
-
-            const name = nameInput.value.trim();
-            const daily = parseFloat(customDailyInput.value) || 1000;
-            const room = getActiveRoom();
+            const input = document.getElementById("memberNameInput");
+            const name = input.value.trim();
 
             if (!name) {
-                alert("يرجى أدخل اسم العضو.");
+                alert("يرجى إدخال اسم العضو.");
                 return;
             }
 
-            const newMember = {
+            db.members.push({
                 id: Date.now(),
                 name: name,
-                dailyAmount: daily,
+                dailyAmount: 100,
+                monthlyAccumulated: 0,
                 paidToday: false,
                 lastPayDate: null,
                 debt: 0
-            };
+            });
 
-            room.members.push(newMember);
-            nameInput.value = "";
-            customDailyInput.value = "";
-            addLog(`تمت إضافة العضو [${name}] بيومية ${daily} ج.م إلى ${room.name}`);
+            addLog(`إضافة العضو الجديد [${name}] إلى النظام.`);
+            input.value = "";
             saveLocalData();
             renderApp();
         }
 
-        function toggleDailyPay(memberId) {
-            const room = getActiveRoom();
-            const member = room.members.find(m => m.id === memberId);
-            if (!member) return;
-
-            if (!member.paidToday) {
-                member.paidToday = true;
-                member.lastPayDate = new Date().toLocaleDateString('ar-EG');
-                room.balance += member.dailyAmount;
-                addLog(`تم تحصيل ${member.dailyAmount} ج.م من العضو [${member.name}]`);
-            } else {
-                member.paidToday = false;
-                room.balance -= member.dailyAmount;
-                addLog(`تراجع عن تحصيل العضو [${member.name}]`);
-            }
-
-            saveLocalData();
-            renderApp();
-        }
-
-        function addDebt(memberId) {
-            const room = getActiveRoom();
-            const member = room.members.find(m => m.id === memberId);
-            if (!member) return;
-
-            const amount = prompt(`إضافة مبلغ ديون على [${member.name}]:`, member.dailyAmount);
-            if (amount && !isNaN(amount)) {
-                member.debt = (member.debt || 0) + parseFloat(amount);
-                addLog(`تم تسجيل دين بقيمة ${amount} ج.م على [${member.name}]`);
+        // حذف عضو
+        function deleteMember(id) {
+            const m = db.members.find(x => x.id === id);
+            if (m && confirm(`هل أنت تأكد من إزالة [${m.name}]؟`)) {
+                db.members = db.members.filter(x => x.id !== id);
+                addLog(`حذف العضو [${m.name}] من القائمة.`);
                 saveLocalData();
                 renderApp();
             }
         }
 
-        function deleteMember(memberId) {
-            const room = getActiveRoom();
-            const member = room.members.find(m => m.id === memberId);
-            if (!member) return;
-
-            if (confirm(`هل أنت تأكد من إزالة [${member.name}]؟`)) {
-                room.members = room.members.filter(m => m.id !== memberId);
-                addLog(`تم حذف العضو [${member.name}] من الغرفة.`);
-                saveLocalData();
-                renderApp();
-            }
-        }
-
+        // بدء يوم جديد وتصفير حالة التحصيل
         function resetDailyStatus() {
-            const room = getActiveRoom();
-            if (!room) return;
-
-            if (confirm("هل ترغب في بدء يوم جديد؟ (سيتلقى غير المدفوعين ديوناً بقيمة يوميتهم)")) {
-                room.members.forEach(m => {
+            if (confirm("بدء يوم جديد؟ (العضو الذي لم يدفع اليوم تضاف 100ج تلقائياً لديونه المتأخرة)")) {
+                db.members.forEach(m => {
                     if (!m.paidToday) {
-                        m.debt = (m.debt || 0) + m.dailyAmount;
+                        m.debt += m.dailyAmount;
                     }
                     m.paidToday = false;
                 });
-                addLog(`تم بدء يوم جديد للغرفة ${room.name}`);
+                addLog("تصفير الحالة اليومية وبدء يوم جديد.");
                 saveLocalData();
                 renderApp();
             }
         }
 
+        // فتح وإغلاق النافذة العائمة للقبض
         function openPayoutModal() {
-            const room = getActiveRoom();
-            if (!room || room.members.length === 0) {
-                alert("لا يوجد أعضاء في الغرفة.");
+            if (db.members.length === 0) {
+                alert("لا يوجد أعضاء في القائمة.");
                 return;
             }
 
             const select = document.getElementById("payoutMemberSelect");
             select.innerHTML = "";
 
-            room.members.forEach(m => {
+            db.members.forEach(m => {
                 const opt = document.createElement("option");
                 opt.value = m.id;
                 opt.innerText = m.name;
@@ -912,65 +837,92 @@
             document.getElementById("payoutModal").classList.remove("active");
         }
 
-        function processPayout() {
-            const room = getActiveRoom();
+        // تنفيذ عملية تسليم الجمعية الكبرى
+        function processMonthlyPayout() {
             const memberId = parseInt(document.getElementById("payoutMemberSelect").value);
             const amount = parseFloat(document.getElementById("payoutAmountInput").value);
 
-            const member = room.members.find(m => m.id === memberId);
+            const m = db.members.find(x => x.id === memberId);
+            if (!m || isNaN(amount)) return;
 
-            if (!member || isNaN(amount)) return;
-
-            if (amount > room.balance) {
-                if (!confirm("المبلغ المراد تسليمه أكبر من رصيد الغرفة المتوفر. هل ترغب بالتسليم بالرغم من ذلك؟")) return;
+            if (amount > db.balance) {
+                if (!confirm("تنبيه: المبلغ المراد تسليمه أكبر من الرصيد المتوفر بالخزنة! هل تريد استكمال الخصم؟")) {
+                    return;
+                }
             }
 
-            room.balance -= amount;
-            addLog(`تم تسليم الجمعية بمبلغ ${amount.toLocaleString()} ج.م للعضو [${member.name}]`);
+            db.balance -= amount;
+            addLog(`تم تسليم الجمعية الكبرى بمبلغ ${amount.toLocaleString()} ج.م للعضو [${m.name}]`);
             closePayoutModal();
             saveLocalData();
             renderApp();
         }
 
+        // عرض سجل الأنشطة والعمليات
         function renderLogs() {
             const list = document.getElementById("logList");
             list.innerHTML = "";
-            db.logs.forEach(log => {
+
+            db.logs.forEach(l => {
                 const li = document.createElement("li");
                 li.className = "log-item";
-                li.innerText = log;
+                li.innerText = l;
                 list.appendChild(li);
             });
         }
 
+        // تصدير كشف الحساب بصيغة PDF
+        function exportToPDF() {
+            const header = document.getElementById('pdfHeader');
+            const noPrints = document.querySelectorAll('.no-print');
+
+            header.style.display = 'block';
+            noPrints.forEach(el => el.style.display = 'none');
+
+            const element = document.getElementById('pdfReportArea');
+            const opt = {
+                margin: 10,
+                filename: `كشف_الجمعية_${new Date().toISOString().slice(0, 10)}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                header.style.display = 'none';
+                noPrints.forEach(el => el.style.display = '');
+            });
+        }
+
+        // تصدير واستيراد النسخ الاحتياطية JSON
         function exportBackup() {
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
-            const downloadAnchor = document.createElement('a');
-            downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `jamia_backup_${new Date().toISOString().slice(0,10)}.json`);
-            document.body.appendChild(downloadAnchor);
-            downloadAnchor.click();
-            downloadAnchor.remove();
-            addLog("تم تصدير نسخة احتياطية للبيانات.");
+            const dlAnchor = document.createElement('a');
+            dlAnchor.setAttribute("href", dataStr);
+            dlAnchor.setAttribute("download", `jamia_backup_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(dlAnchor);
+            dlAnchor.click();
+            dlAnchor.remove();
+            addLog("تم تصدير نسخة احتياطية من كافة بيانات النظام.");
         }
 
         function importBackup(event) {
-            const fileReader = new FileReader();
-            fileReader.onload = function(e) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
                 try {
-                    const importedDb = JSON.parse(e.target.result);
-                    if (importedDb && importedDb.rooms) {
-                        db = importedDb;
+                    const imported = JSON.parse(e.target.result);
+                    if (imported && imported.members) {
+                        db = imported;
                         saveLocalData();
                         renderApp();
-                        alert("تم استيراد النسخة الاحتياطية بنجاح!");
-                        addLog("تم استيراد نسخة احتياطية من ملف.");
+                        alert("تم استيراد واسترجاع البيانات بنجاح!");
+                        addLog("تم استيراد نسخة احتياطية خارجية.");
                     }
                 } catch (err) {
-                    alert("خطأ في قراءة ملف النسخة الاحتياطية.");
+                    alert("خطأ: الملف المرفق غير صالح للاستيراد.");
                 }
             };
-            fileReader.readAsText(event.target.files[0]);
+            reader.readAsText(event.target.files[0]);
         }
     </script>
 </body>
